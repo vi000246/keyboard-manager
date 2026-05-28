@@ -74,7 +74,58 @@
           <select id="stats-app">${opts}</select>
         </label>
         <label>Kind: <select id="stats-kind">${kinds}</select></label>
+        <span id="helper-status-slot"></span>
       </div>`;
+  }
+
+  // ── Helper status badge ────────────────────────────────────────────
+
+  let helperPollTimer = null;
+  let lastHelperStatus = null;
+
+  async function pollHelperStatus() {
+    try {
+      const r = await fetch("/api/helper/status");
+      if (!r.ok) return;
+      lastHelperStatus = await r.json();
+      renderHelperBadge();
+    } catch {
+      // Backend probably restarting — keep last state on screen
+    }
+  }
+
+  function renderHelperBadge() {
+    const slot = root.querySelector("#helper-status-slot");
+    if (!slot) return;
+    if (!lastHelperStatus) {
+      slot.innerHTML = `<span class="helper-badge status-loading">helper: …</span>`;
+      return;
+    }
+    const s = lastHelperStatus;
+    let cls, label, detail;
+    if (!s.process_running) {
+      cls = "disconnected"; label = "disconnected";
+      detail = "helper not reachable — check launchd";
+    } else if (s.recently_captured) {
+      cls = "active"; label = "active";
+      detail = `last event ${s.seconds_since_last_event}s ago`;
+    } else if (s.last_event_ts) {
+      cls = "idle"; label = "idle";
+      detail = `no events in ${s.seconds_since_last_event}s`;
+    } else {
+      cls = "idle"; label = "no events yet";
+      detail = "helper reachable but DB empty for native_helper";
+    }
+    slot.innerHTML = `
+      <span class="helper-badge status-${cls}" title="${escapeAttr(detail)}">
+        helper: <strong>${label}</strong>
+      </span>`;
+  }
+
+  function startHelperPolling() {
+    if (helperPollTimer) return;
+    pollHelperStatus();
+    helperPollTimer = setInterval(pollHelperStatus, 5000);
   }
 
   function renderHeatmapSection(heatmap) {
@@ -147,6 +198,8 @@
       }
     }
     wire();
+    renderHelperBadge();
+    startHelperPolling();
   }
 
   function reapplyOverlayForLayer() {
@@ -205,6 +258,8 @@
         rerenderToolbarOnly(sel ? sel.value || null : null, kindSel ? kindSel.value : "single");
       });
     }
+    // The badge lives inside the toolbar — restore it after the re-render
+    renderHelperBadge();
   }
 
   function wireBidirectional(gridEl, tableEl) {

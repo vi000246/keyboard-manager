@@ -183,6 +183,23 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 }
 .stats-toolbar input[type="search"]::placeholder { color: #666; }
 
+/* Helper status badge (UI-2) */
+.helper-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid currentColor;
+  margin-left: auto;
+}
+
+.helper-badge.status-active        { color: #4ade80; }
+.helper-badge.status-idle          { color: #fbbf24; }
+.helper-badge.status-disconnected  { color: #f87171; }
+.helper-badge.status-loading       { color: #888; }
+
 .meta {
   color: #999;
   font-size: 0.9rem;
