@@ -256,10 +256,14 @@
    * switched to NAV (where that position is TRN).
    */
   function applyPressed(gridRoot) {
-    gridRoot.querySelectorAll(".key.pressed").forEach((k) =>
-      k.classList.remove("pressed")
-    );
-    if (heldKeys.size === 0) return;
+    // Clear BOTH classes so the amber virtual marker disappears on release.
+    gridRoot.querySelectorAll(".key.pressed, .key.pressed-virtual").forEach((k) => {
+      k.classList.remove("pressed");
+      k.classList.remove("pressed-virtual");
+    });
+    // Don't early-return when only virtualHeld has entries — we still need
+    // the loop below to paint them.
+    if (heldKeys.size === 0 && virtualHeld.size === 0) return;
 
     const lit = new Set();
     for (const held of heldKeys) {
@@ -274,8 +278,11 @@
         if (cellAtCol) cellAtCol.classList.add("pressed");
       }
     }
-    // Virtual holds get their own marker class on top of .pressed so the user
-    // can tell "I clicked this" apart from "I'm pressing this".
+    // Virtual holds: ONLY add the dedicated `.pressed-virtual` class. Adding
+    // `.pressed` too made the `.kind-transparent.pressed` rule (higher
+    // specificity) clobber the amber styling on TRN slots — which is exactly
+    // the case LT clicks hit, since the freshly-active layer renders that
+    // slot as TRN.
     for (const pos of virtualHeld) {
       if (lit.has(pos)) continue;
       lit.add(pos);
@@ -283,10 +290,7 @@
       const rowEl = gridRoot.querySelector(`.row.row-${r}`);
       if (!rowEl) continue;
       const cellAtCol = rowEl.querySelectorAll(".key")[c];
-      if (cellAtCol) {
-        cellAtCol.classList.add("pressed");
-        cellAtCol.classList.add("pressed-virtual");
-      }
+      if (cellAtCol) cellAtCol.classList.add("pressed-virtual");
     }
   }
 
