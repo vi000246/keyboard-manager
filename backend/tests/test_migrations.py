@@ -72,3 +72,80 @@ def test_events_can_insert_with_defaults(tmp_path):
         assert row == ("", 1)  # default modifiers='', count=1
     finally:
         conn.close()
+
+
+# ─── Data-preservation safety net ──────────────────────────────────────
+#
+# These tests encode the contract: future migrations MUST stay additive.
+# The live capture has been accumulating events that cannot be reproduced;
+# a `DROP TABLE` or `DELETE FROM` in the migration would silently wipe
+# everything on the next container restart. If you need a non-additive
+# schema change in the future, write it as an explicit one-shot script
+# with a backup step, NOT by editing SCHEMA.
+
+
+def test_schema_text_contains_no_destructive_statements():
+    """Hard-fail if anyone adds DROP / DELETE / TRUNCATE to the migration."""
+    from backend.db import migrations
+
+    schema = migrations.SCHEMA.upper()
+    for forbidden in ("DROP TABLE", "DROP INDEX", "DELETE FROM", "TRUNCATE"):
+        assert forbidden not in schema, (
+            f"{forbidden} is forbidden in db/migrations.py SCHEMA — "
+            "see docs/data-preservation.md"
+        )
+
+
+def test_schema_uses_if_not_exists_for_every_create():
+    """Every CREATE must be guarded so reruns don't clobber existing data."""
+    from backend.db import migrations
+
+    schema = migrations.SCHEMA.upper()
+    create_count = schema.count("CREATE ")
+    guarded = schema.count("CREATE TABLE IF NOT EXISTS") + schema.count(
+        "CREATE INDEX IF NOT EXISTS"
+    )
+    assert create_count == guarded, (
+        f"every CREATE must be CREATE IF NOT EXISTS (found {create_count} "
+        f"CREATEs but only {guarded} guarded)"
+    )
+
+
+def test_ensure_schema_on_populated_db_preserves_rows(tmp_path):
+    """The high-value contract: running ensure_schema() on a database that
+    already has live capture events must NOT touch those rows. This is the
+    scenario every container restart / image rebuild goes through."""
+    db = tmp_path / "test.db"
+    ensure_schema(db)
+
+    conn = sqlite3.connect(db)
+    try:
+        conn.executemany(
+            "INSERT INTO events(ts, app_bundle, key, modifiers, count, snapshot_id, source) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            [
+                (100, "com.foo", "j", "",    1, 1, "native_helper"),
+                (101, "com.foo", "k", "",    1, 1, "native_helper"),
+                (102, "com.foo", "v", "cmd", 1, 1, "native_helper"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # Simulate three back-to-back container restarts.
+    for _ in range(3):
+        ensure_schema(db)
+
+    conn = sqlite3.connect(db)
+    try:
+        rows = conn.execute(
+            "SELECT key, modifiers, source FROM events ORDER BY id"
+        ).fetchall()
+        assert rows == [
+            ("j", "",    "native_helper"),
+            ("k", "",    "native_helper"),
+            ("v", "cmd", "native_helper"),
+        ]
+    finally:
+        conn.close()

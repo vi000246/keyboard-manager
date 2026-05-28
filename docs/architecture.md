@@ -127,7 +127,7 @@ CREATE TABLE snapshots (
 | GET | `/health` | M0 | Liveness + path probes |
 | GET | `/api/layout` | M1 | Parsed `.vil` tree |
 | GET | `/api/stats` | M2 | Top-N keys (optional `?app=`, `?top=`) |
-| POST | `/api/stats/import` | M2 | One-shot JSON ingest |
+| ~~POST~~ | ~~`/api/stats/import`~~ | ~~M2~~ | Removed — native helper writes directly; no JSON to ingest |
 | GET | `/api/stats/heatmap` | M3 | Per-key counts keyed by (layer, row, col) |
 | GET | `/api/apps` | M2 | App bundle ID + bucket list |
 | WS | `/api/live` | M4 | Proxies native-helper events |

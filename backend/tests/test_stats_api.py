@@ -1,12 +1,11 @@
 import importlib
-import json
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.db.migrations import ensure_schema
-from backend.scripts.import_keystat import import_file
+from backend.tests.conftest import seed_events
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mylayout.vil"
 
@@ -15,17 +14,10 @@ FIXTURE = Path(__file__).parent / "fixtures" / "mylayout.vil"
 def client(tmp_path, monkeypatch):
     db = tmp_path / "t.db"
     ensure_schema(db)
-    sample = tmp_path / "k.json"
-    sample.write_text(
-        json.dumps(
-            {
-                "__meta": {},
-                "com.googlecode.iterm2": {"j": 5892, "k": 2314, "cmd+v": 3},
-                "com.brave.Browser": {"right": 2497, "cmd+1": 1529},
-            }
-        )
-    )
-    import_file(sample, db)
+    seed_events(db, {
+        "com.googlecode.iterm2": {"j": 5892, "k": 2314, "cmd+v": 3},
+        "com.brave.Browser": {"right": 2497, "cmd+1": 1529},
+    })
     monkeypatch.setenv("VIAL_PATH", str(FIXTURE))
     monkeypatch.setenv("DB_PATH", str(db))
     from backend.api import layout as layout_mod

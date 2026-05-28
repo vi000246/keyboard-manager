@@ -1,5 +1,14 @@
 # Migration: Hammerspoon `keystat.lua` → `native-helper`
 
+> **Update 2026-05-28 (later same day)**: the JSON importer
+> (`backend/scripts/import_keystat.py`) has been **removed**. The 8-day
+> baseline imported under `source='hs_keystat_json'` remains in SQLite
+> indefinitely as historical data. Going forward, the native helper writes
+> directly to SQLite under `source='native_helper'` — no more JSON in the
+> pipeline. The "rollback" section below is now informational only; restoring
+> Hammerspoon would resume writing the JSON but the repo no longer has tooling
+> to import it back.
+
 Originally a Hammerspoon `keystat.lua` module fed `~/keystat-counts.json` with
 cumulative per-(app, key) counts. Starting 2026-05-28 the `keyboard-manager`
 native helper owns global keystroke capture and writes events into SQLite

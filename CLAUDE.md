@@ -63,7 +63,7 @@ keyboard-manager/
 - Helper is launchd-managed: `~/Library/LaunchAgents/com.keyboard-manager.helper.plist`
 - Install/uninstall via `native-helper/install-launchd.sh` / `uninstall-launchd.sh`
 - macOS Accessibility setup: see `docs/macos-accessibility.md` (must grant the `Python.app` framework bundle, **not** the `.venv/bin/python` symlink)
-- Hammerspoon `keystat.lua` is deprecated as of 2026-05-28; SQLite at `~/Library/Application Support/keyboard-manager/keystat.db` is now the source of truth
+- Hammerspoon `keystat.lua` is deprecated; SQLite at `~/Library/Application Support/keyboard-manager/keystat.db` is the source of truth. The legacy JSON importer (`backend/scripts/import_keystat.py`) has been removed — the native helper writes directly to SQLite
 - Default ports: backend `:8001`, frontend `:8081`, helper WS `:8766` (8765 collides with Hammerspoon's `hs.httpserver` on some setups)
 
 ## Things NOT to do
@@ -85,9 +85,8 @@ docker compose up -d
 
 # M4+: start native helper (host-side)
 cd native-helper && python main.py
-
-# M2+: one-shot JSON import (CLI to be added)
-python backend/scripts/import_keystat_json.py ~/keystat-counts.json
+# or run the LaunchAgent (preferred)
+./native-helper/install-launchd.sh
 ```
 
 ## Reading order for a fresh agent

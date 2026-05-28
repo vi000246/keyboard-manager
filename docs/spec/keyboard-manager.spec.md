@@ -17,6 +17,7 @@
 | Date | Source PRD | Feature SRS | Plan | Summary |
 |------|------------|-------------|------|---------|
 | 2026-05-28 | `docs/PRD.md` | `docs/srs/keyboard-manager-mvp.srs.md` | `docs/plans/keyboard-manager-mvp.plan.md` | Created — local Docker tool that parses Vial `.vil` for layout viz + ingests keystrokes from a macOS native helper for heatmap & live simulator |
+| 2026-05-28 | — | — | — | JSON importer removed (`backend/scripts/import_keystat.py`). Hammerspoon → native_helper cutover complete; helper writes directly to SQLite. Imported baseline rows (`source='hs_keystat_json'`) remain as historical data. |
 
 ## Summary
 
