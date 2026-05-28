@@ -10,7 +10,9 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 
+from ..db.heatmap_mapper import build_position_index, overlay_stats
 from ..db.repository import AppsRepo, StatsRepo
+from ..parsers.vial import parse
 
 logger = logging.getLogger("keyboard_manager.api.stats")
 
@@ -22,6 +24,35 @@ def get_apps():
     from ..main import DB_PATH
 
     return AppsRepo(DB_PATH).all()
+
+
+@router.get("/api/stats/heatmap")
+def get_heatmap(app: str | None = None):
+    """Return per-position counts for the keyboard heatmap overlay.
+
+    Pulls a generous top-500 single-key rows (covers >99% of keystrokes in
+    practice), projects each onto its physical position via the keymap, and
+    returns mapped cells + unmapped keys + coverage_pct.
+    """
+    from ..main import DB_PATH, VIAL_PATH
+
+    layout = parse(VIAL_PATH)
+    idx = build_position_index(layout)
+    repo = StatsRepo(DB_PATH)
+    rows = repo.top_n(app=app, kind="single", n=500)
+    result = overlay_stats(idx, rows)
+
+    mapped = sum(c["count"] for c in result["cells"])
+    unmapped = sum(u["count"] for u in result["unmapped"])
+    total = mapped + unmapped
+
+    return {
+        "scope": {"app": app},
+        "max_count": result["max_count"],
+        "cells": result["cells"],
+        "unmapped": result["unmapped"],
+        "coverage_pct": (mapped / total * 100) if total else 0.0,
+    }
 
 
 @router.get("/api/stats")
