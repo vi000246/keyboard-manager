@@ -383,10 +383,13 @@
   }
 
   /**
-   * Click any layer-tap / mod-tap cell to toggle a virtual hold. Useful
-   * because QMK firmware doesn't emit any macOS event during a real LT
-   * hold (it just swaps the active layer internally) — so the only way
-   * to preview a layered layout without typing on it is to click.
+   * Click a layer-tap cell to toggle a virtual hold. This exists because
+   * QMK firmware emits no macOS event during a real LT hold — it swaps the
+   * active layer internally — so the only way to preview a layered layout
+   * without typing on it is to click. We deliberately do NOT accept
+   * mod-tap or tap-dance here: those modifiers fire perfectly well via a
+   * physical press, and click-simulating them would be confusing (e.g.
+   * "I clicked the Hyper key, does that also block my real Shift?").
    */
   function wireClickToSimulate() {
     root.addEventListener("click", (e) => {
@@ -401,9 +404,7 @@
       if (Number.isNaN(row) || Number.isNaN(col) || !layout) return;
       const baseSlot = layout.layers[0]?.rows[row]?.keys[col];
       if (!baseSlot) return;
-      const kind = baseSlot.resolved.expanded_kind;
-      // Click is meaningful only on slots that DO something on hold.
-      if (kind !== "layer-tap" && kind !== "mod-tap" && kind !== "tap-dance") return;
+      if (baseSlot.resolved.expanded_kind !== "layer-tap") return;
       const pos = `${row}:${col}`;
       if (virtualHeld.has(pos)) virtualHeld.delete(pos);
       else virtualHeld.add(pos);
