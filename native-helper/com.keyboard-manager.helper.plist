@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.keyboard-manager.helper</string>
+
+  <!-- Run the helper through its own venv so dependencies are pinned. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/logan/Projects/keyboard-manager/native-helper/.venv/bin/python</string>
+    <string>-m</string>
+    <string>native_helper.main</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/logan/Projects/keyboard-manager/native-helper</string>
+
+  <!-- PYTHONPATH so `import backend.db.migrations` works when launched by launchd. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTHONPATH</key>
+    <string>/Users/logan/Projects/keyboard-manager/native-helper:/Users/logan/Projects/keyboard-manager</string>
+    <key>HELPER_WS_PORT</key>
+    <string>8766</string>
+    <key>DB_PATH</key>
+    <string>/Users/logan/Library/Application Support/keyboard-manager/keystat.db</string>
+  </dict>
+
+  <!-- Start at login + keep alive across crashes. -->
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- Throttle restart loop so a misconfigured helper doesn't spin. -->
+  <key>ThrottleInterval</key>
+  <integer>10</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/keyboard-manager-helper.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/keyboard-manager-helper.err.log</string>
+</dict>
+</plist>
