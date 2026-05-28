@@ -76,12 +76,25 @@ def _load(path: Path) -> dict:
             rows.append({"row": row.row, "keys": keys})
         layers_json.append({"index": layer.index, "rows": rows})
 
+    # Combos store raw keycodes; the frontend tooltip wants resolved labels
+    # (so "KC_J + KC_K → KC_ESCAPE" displays as "J + K → Esc"). Compute them
+    # server-side using the same resolver the per-key serialization uses.
+    def _label_of(raw: str) -> str:
+        return resolve(raw, ctx).label_top or raw
+
+    combo_json: list[dict] = []
+    for c in layout.combo:
+        d = asdict(c)
+        d["trigger_labels"] = [_label_of(t) for t in c.triggers]
+        d["output_label"] = _label_of(c.output)
+        combo_json.append(d)
+
     result = {
         "vial_protocol": layout.vial_protocol,
         "uid": layout.uid,
         "layers": layers_json,
         "tap_dance": [asdict(td) for td in layout.tap_dance],
-        "combo": [asdict(c) for c in layout.combo],
+        "combo": combo_json,
     }
 
     _cache["key"] = cache_key

@@ -262,6 +262,11 @@
     await ensureLayout();
     render();
     connect();
+    // One-time hover-tooltip wire-up. Delegation on the section means the
+    // listener survives the frequent innerHTML re-renders triggered by WS.
+    if (window.keyTooltip) {
+      window.keyTooltip.setupKeyTooltips(root, () => layout);
+    }
   }
 
   // Lazy-load: only fetch + connect once the Interactive tab is opened.

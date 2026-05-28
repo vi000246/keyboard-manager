@@ -92,6 +92,12 @@
   show();
   updateLayerPickerVisibility();
 
+  // One-time hover-tooltip wire-up. Event delegation on the section means
+  // re-renders inside it don't drop the listener.
+  if (window.keyTooltip) {
+    window.keyTooltip.setupKeyTooltips(container, () => layoutCache);
+  }
+
   // Public surface for cross-module coordination (vial-upload.js).
   function refresh() {
     layoutCache = null;

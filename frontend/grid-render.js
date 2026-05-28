@@ -9,6 +9,11 @@
   /**
    * Render a single layer's grid as side-by-side halves.
    *
+   * `data-layer` on the .keyboard wrapper + `data-col` on each .key cell let
+   * key-tooltip.js (and any future module that needs to look up a slot) reverse
+   * the rendered DOM back to `layout.layers[layer].rows[row].keys[col]`. The
+   * row index is already encoded in the `.row.row-N` class.
+   *
    * @param {object} layer  Layout API layer: {index, rows: [{row, keys: [...]}]}
    * @returns {string}
    */
@@ -19,11 +24,13 @@
     const right = layer.rows.slice(5, 10);
     const renderRow = (row) =>
       `<div class="row row-${row.row}">` +
-      row.keys.map((k) => window.keycodeFormat.renderKey(k)).join("") +
+      row.keys.map((k, col) =>
+        window.keycodeFormat.renderKey(k, col)
+      ).join("") +
       `</div>`;
 
     return `
-      <div class="keyboard">
+      <div class="keyboard" data-layer="${layer.index}">
         <div class="half half-left">
           ${left.map(renderRow).join("")}
         </div>

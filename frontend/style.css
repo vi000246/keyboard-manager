@@ -371,3 +371,100 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   opacity: 1;
   border-style: solid;
 }
+
+/* ── Key-detail tooltip (UI-6) ────────────────────────────────────── */
+
+.key-tooltip {
+  position: fixed;
+  z-index: 1000;
+  min-width: 14rem;
+  max-width: 24rem;
+  background: #1a1f2e;
+  color: #e5e5e5;
+  border: 1px solid #3a4a5a;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+.kt-header {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #2a3441;
+  background: #232a3a;
+  color: #cbd5e1;
+}
+
+/* Kind color stripe — matches the cell border accents in the grid */
+.kt-kind-layer-tap     { border-left: 3px solid #4a8b6a; }
+.kt-kind-mod-tap       { border-left: 3px solid #8a6abf; }
+.kt-kind-tap-dance     { border-left: 3px solid #bf9a3a; }
+.kt-kind-shift-wrapped,
+.kt-kind-mod-wrapped   { border-left: 3px solid #b07a3a; }
+.kt-kind-transparent   { border-left: 3px solid #6b7280; }
+.kt-kind-empty         { border-left: 3px solid #444; }
+.kt-kind-unknown       { border-left: 3px solid #c44; }
+.kt-kind-plain         { border-left: 3px solid #4b5563; }
+
+.kt-section { padding: 0.5rem 0.8rem; }
+
+.kt-row {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: 0.4rem;
+  padding: 0.15rem 0;
+  align-items: baseline;
+}
+
+.kt-row .kt-label {
+  color: #94a3b8;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kt-sub {
+  color: #c8d6e8;
+  padding-left: 6.4rem;
+  font-size: 0.78rem;
+}
+
+.kt-note {
+  color: #94a3b8;
+  font-size: 0.76rem;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+.kt-divider {
+  border-top: 1px solid #2a3441;
+}
+
+.kt-raw {
+  padding: 0.35rem 0.8rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.kt-raw .kt-label {
+  color: #64748b;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.kt-raw code,
+.kt-note code,
+.kt-row code {
+  background: #0f1521;
+  color: #cbd5e1;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+}

@@ -127,6 +127,18 @@ def test_health_endpoint_reports_vial_exists(client):
     assert body["vial_exists"] is True
 
 
+def test_combo_includes_resolved_labels(client):
+    """Combo serialization adds trigger_labels + output_label so the frontend
+    tooltip can show 'J + K → Esc' without re-doing keycode resolution."""
+    body = client.get("/api/layout").json()
+    # mylayout.vil combo[0] = ["KC_J", "KC_K", "KC_NO", "KC_NO", "KC_ESCAPE"]
+    c0 = body["combo"][0]
+    assert c0["triggers"] == ["KC_J", "KC_K"]
+    assert c0["trigger_labels"] == ["J", "K"]
+    assert c0["output"] == "KC_ESCAPE"
+    assert c0["output_label"] == "Esc"
+
+
 def test_mylayout_full_keycode_coverage(client):
     """M1 acceptance gate (task 1.5).
 
