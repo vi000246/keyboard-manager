@@ -142,3 +142,64 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .key.kind-transparent { background: #1a1a1a; opacity: 0.55; }
 .key.kind-empty       { background: transparent; border-style: dashed; opacity: 0.35; }
 .key.kind-unknown     { border-color: #c44; color: #fbb; }
+
+/* ── Stats dashboard ────────────────────────────────────────────────── */
+
+.stats-toolbar {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  align-items: center;
+}
+
+.stats-toolbar label {
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.stats-toolbar select {
+  margin-left: 0.4rem;
+  background: #222;
+  color: #e5e5e5;
+  border: 1px solid #444;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font: inherit;
+  min-width: 14rem;
+}
+
+.meta {
+  color: #999;
+  font-size: 0.9rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.stats-table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 50rem;
+  font-size: 0.9rem;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 0.4rem 0.8rem;
+  text-align: left;
+  border-bottom: 1px solid #333;
+}
+
+.stats-table th {
+  background: #1a1a1a;
+  color: #888;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.stats-table tr:hover { background: #1f2937; }
+.stats-table tr.highlighted { background: #2a4d7a; }
+
+.stats-table .rank  { color: #666; width: 3rem; }
+.stats-table .count { font-variant-numeric: tabular-nums; width: 6rem; }
+.stats-table .pct   { color: #9ab; font-variant-numeric: tabular-nums; width: 5rem; }

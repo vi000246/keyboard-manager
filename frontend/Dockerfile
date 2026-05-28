@@ -1,8 +1,8 @@
 FROM nginx:alpine
 
-COPY index.html /usr/share/nginx/html/index.html
-COPY style.css  /usr/share/nginx/html/style.css
-COPY app.js     /usr/share/nginx/html/app.js
+# Copy all frontend static assets in one shot — keeps the image in sync as
+# new modules (heatmap.js, interactive.js, …) get added.
+COPY *.html *.css *.js /usr/share/nginx/html/
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
