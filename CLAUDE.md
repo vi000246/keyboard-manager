@@ -36,6 +36,7 @@ keyboard-manager/
 | `~/Projects/keyboard-map/hotkey-analysis.md` | 8-day, 137k-keystroke stats baseline (the data we want to visualize) |
 | `~/Projects/keyboard-map/keystat_analyze.py` | The aggregation logic to port into the backend |
 | `~/Projects/keyboard-map/mylayout.vil` | The actual Vial config — main parsing target |
+| `docs/macos-accessibility.md` | One-time Accessibility permission setup for the native helper (the `Python.app` gotcha) |
 
 ## Project conventions
 
@@ -48,14 +49,22 @@ keyboard-manager/
 
 ## Milestones
 
-| # | Name | What ships |
+| # | Name | Status |
 |---|---|---|
-| 0 | Bootstrap | Repo, scaffold, docker-compose skeleton — **current** |
-| 1 | Static Viewer | `.vil` parser + 6-layer grid |
-| 2 | Stats baseline | SQLite schema + JSON importer + top-N reports |
-| 3 | Heatmap | Stats overlay on layout grid |
-| 4 | Native helper + Interactive | macOS capture + WS + live grid switching |
-| 5 | Polish | docker compose 一鍵起、launchd plist、README polish |
+| 0 | Bootstrap | ✅ done |
+| 1 | Static Viewer | ✅ done |
+| 2 | Stats baseline | ✅ done |
+| 3 | Heatmap | ✅ done |
+| 4 | Native helper + Interactive | ✅ done (pynput + WS + launchd) |
+| 5 | Polish | partial — launchd done (M5.1); `scripts/smoke.sh` + README finalize TODO |
+
+## Operational notes
+
+- Helper is launchd-managed: `~/Library/LaunchAgents/com.keyboard-manager.helper.plist`
+- Install/uninstall via `native-helper/install-launchd.sh` / `uninstall-launchd.sh`
+- macOS Accessibility setup: see `docs/macos-accessibility.md` (must grant the `Python.app` framework bundle, **not** the `.venv/bin/python` symlink)
+- Hammerspoon `keystat.lua` is deprecated as of 2026-05-28; SQLite at `~/Library/Application Support/keyboard-manager/keystat.db` is now the source of truth
+- Default ports: backend `:8001`, frontend `:8081`, helper WS `:8766` (8765 collides with Hammerspoon's `hs.httpserver` on some setups)
 
 ## Things NOT to do
 

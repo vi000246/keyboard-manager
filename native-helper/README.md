@@ -24,11 +24,25 @@ Scaffold only. Implementation arrives in M4 (see `docs/PRD.md` Milestones).
 
 ## macOS permissions required
 
-The helper needs **Accessibility** permission (System Settings → Privacy & Security → Accessibility). Grant it once to the Python interpreter (or to the compiled launcher) you use to run the helper.
+The helper needs **Accessibility** permission. The gotcha: macOS tracks the
+`Python.app` framework bundle, not the venv `bin/python` symlink — so you must
+grant the `.app` bundle that `bin/python` ultimately resolves to.
 
-## launchd plist (M5)
+See **[`docs/macos-accessibility.md`](../docs/macos-accessibility.md)** for the
+full one-time setup steps and the verification snippet.
 
-A `com.keyboard-manager.helper.plist` will live here and be installed to `~/Library/LaunchAgents/` for auto-start.
+## launchd plist
+
+`com.keyboard-manager.helper.plist` ships in this directory. Install it with:
+
+```bash
+./install-launchd.sh        # idempotent — copies to ~/Library/LaunchAgents/ and loads
+./uninstall-launchd.sh      # removes it; SQLite events are preserved
+```
+
+The plist is configured with `RunAtLoad=true` + `KeepAlive=true` so the helper
+starts at login and self-restarts on crash. `ThrottleInterval=10` prevents
+tight restart loops.
 
 ## Relationship to existing `~/.hammerspoon/keystat.lua`
 
