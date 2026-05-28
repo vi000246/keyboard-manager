@@ -12,9 +12,11 @@ from fastapi.testclient import TestClient
 FIXTURE = Path(__file__).parent / "fixtures" / "mylayout.vil"
 
 
-def _client(monkeypatch, vial_path):
-    """Reload backend.main so module-level VIAL_PATH picks up the env override."""
+def _client(monkeypatch, vial_path, db_path=None):
+    """Reload backend.main so module-level VIAL_PATH / DB_PATH picks up env."""
     monkeypatch.setenv("VIAL_PATH", str(vial_path))
+    if db_path is not None:
+        monkeypatch.setenv("DB_PATH", str(db_path))
     # Clear the layout cache between tests
     from backend.api import layout
     layout._cache.clear()
@@ -24,8 +26,10 @@ def _client(monkeypatch, vial_path):
 
 
 @pytest.fixture
-def client(monkeypatch):
-    return _client(monkeypatch, FIXTURE)
+def client(monkeypatch, tmp_path):
+    # Layout tests don't touch stats, but main.py calls ensure_schema(DB_PATH)
+    # at import time — point at tmp_path so it doesn't try /data/ on macOS.
+    return _client(monkeypatch, FIXTURE, tmp_path / "t.db")
 
 
 def test_layout_ok(client):
@@ -100,7 +104,7 @@ def test_layout_keycodes_endpoint(client):
 
 
 def test_layout_503_when_vial_missing(monkeypatch, tmp_path):
-    c = _client(monkeypatch, tmp_path / "absent.vil")
+    c = _client(monkeypatch, tmp_path / "absent.vil", tmp_path / "t.db")
     r = c.get("/api/layout")
     assert r.status_code == 503
     assert r.json()["detail"]["error"] == "VIAL_NOT_FOUND"
@@ -109,7 +113,7 @@ def test_layout_503_when_vial_missing(monkeypatch, tmp_path):
 def test_layout_422_on_unsupported_protocol(monkeypatch, tmp_path):
     bad = tmp_path / "bad.vil"
     bad.write_text('{"vial_protocol": 99, "version": 1, "layout": []}')
-    c = _client(monkeypatch, bad)
+    c = _client(monkeypatch, bad, tmp_path / "t.db")
     r = c.get("/api/layout")
     assert r.status_code == 422
     assert r.json()["detail"]["error"] == "VIAL_PARSE_ERROR"
