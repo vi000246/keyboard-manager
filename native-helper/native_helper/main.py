@@ -42,7 +42,9 @@ DEFAULT_DB = Path(
     )
 )
 DEFAULT_WS_HOST = os.environ.get("HELPER_WS_HOST", "0.0.0.0")
-DEFAULT_WS_PORT = int(os.environ.get("HELPER_WS_PORT", "8765"))
+# 8765 is used by Hammerspoon's hs.httpserver on many setups; 8766 stays out
+# of the way. Override with HELPER_WS_PORT if you need a different port.
+DEFAULT_WS_PORT = int(os.environ.get("HELPER_WS_PORT", "8766"))
 
 logger = logging.getLogger("native_helper")
 
