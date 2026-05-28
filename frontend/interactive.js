@@ -19,6 +19,13 @@
   let layout = null;
   let activeLayer = 0;
   const heldKeys = new Set();
+  // Mouse-click simulated holds. QMK's standard LT(layer, kc) emits no
+  // macOS event during the hold window — firmware swallows it. So we
+  // can't observe a real hold via pynput. Clicking a layer-tap cell
+  // (or any LT-style key) toggles a virtual hold here so the user can
+  // still preview the layered layout without typing on it. Keys are
+  // stored as "row:col" strings into BASE.
+  const virtualHeld = new Set();
   let socket = null;
   let helperStatus = "connecting";
   let reconnectDelay = 1000;  // ms — grows up to 10s
@@ -83,6 +90,27 @@
   };
 
   /**
+   * Categorize the *set* of currently-held modifiers so we can attribute a
+   * single "ctrl" event to the right physical source:
+   *   - all 4 mods held → user is pressing a Hyper-source slot (ALL_T-style)
+   *   - 3 of {ctrl,shift,alt} held (no cmd) → Meh-source slot
+   *   - 1-2 mods → an "exact" source (plain mod key / mod-tap-hold / TD-hold)
+   * Without this, holding TD(0) (hold=Ctrl) would also light up ALL_T
+   * because Hyper contains Ctrl — visually confusing because ALL_T isn't
+   * actually the source.
+   */
+  function _modContext() {
+    const heldModSet = new Set();
+    for (const h of heldKeys) {
+      const n = MOD_NAMES[h.toLowerCase()];
+      if (n) heldModSet.add(n);
+    }
+    if (heldModSet.size === 4) return "hyper";
+    if (heldModSet.size === 3 && !heldModSet.has("Cmd")) return "meh";
+    return "exact";
+  }
+
+  /**
    * Find every BASE-layer slot a held event-key could correspond to.
    *
    * Multiple positions can produce the same event (e.g. TD(3) tap=Tab AND
@@ -95,6 +123,7 @@
     const label = labelFor(eventKey);
     const isMod = MODIFIER_EVENT_KEYS.has(eventKey.toLowerCase());
     const modName = isMod ? MOD_NAMES[eventKey.toLowerCase()] : null;
+    const modCtx = isMod ? _modContext() : null;
 
     const matches = [];
     for (let r = 0; r < base.rows.length; r++) {
@@ -105,27 +134,31 @@
         const res = k.resolved;
         const kind = res.expanded_kind;
 
-        // Direct label match (covers plain letters, layer-tap tap, mod-tap tap, etc.).
+        // Direct label match (plain letters, layer-tap tap, mod-tap tap, ...)
         if (label && res.label_top === label) {
           matches.push({ key: k, row: r, col: c, kind, reason: "label" });
           continue;
         }
 
-        // Modifier-by-hold: holding "cmd" highlights any position whose hold
-        // action sends Cmd — covers LGUI_T(...), ALL_T(...) (Hyper expands),
-        // TD(N) whose hold branch is a modifier, etc.
-        if (modName) {
-          const hold = res.hold || "";
-          const holdMatchesMod =
-            hold === modName ||
-            (hold === "Hyper" && ["Cmd", "Ctrl", "Alt", "Shift"].includes(modName)) ||
-            (hold === "Meh"   && ["Ctrl", "Alt", "Shift"].includes(modName));
-          if ((kind === "mod-tap" || kind === "tap-dance") && holdMatchesMod) {
-            matches.push({ key: k, row: r, col: c, kind, reason: "hold-mod" });
-            continue;
+        if (!modName) continue;
+        const hold = res.hold || "";
+
+        if (modCtx === "hyper") {
+          // Only attribute the mod to a Hyper-source slot.
+          if (hold === "Hyper" && (kind === "mod-tap" || kind === "tap-dance")) {
+            matches.push({ key: k, row: r, col: c, kind, reason: "hyper" });
           }
-          // Plain modifier keys (KC_LSHIFT label="LShift", KC_RSHIFT="RShift").
-          if (kind === "plain" && res.label_top && res.label_top.endsWith(modName)) {
+        } else if (modCtx === "meh") {
+          if (hold === "Meh" && (kind === "mod-tap" || kind === "tap-dance")) {
+            matches.push({ key: k, row: r, col: c, kind, reason: "meh" });
+          }
+        } else {
+          // Exact mode: plain mod key, or mod-tap / TD whose hold is exactly
+          // this modifier. Critically we do NOT match Hyper/Meh here — they
+          // only fire when the full set is held.
+          if ((kind === "mod-tap" || kind === "tap-dance") && hold === modName) {
+            matches.push({ key: k, row: r, col: c, kind, reason: "hold-mod" });
+          } else if (kind === "plain" && res.label_top && res.label_top.endsWith(modName)) {
             matches.push({ key: k, row: r, col: c, kind, reason: "plain-mod" });
           }
         }
@@ -147,6 +180,7 @@
   /**
    * If any held key is a layer-tap on BASE, the displayed layer follows its
    * hold target. Last-held wins on conflict (rare in practice).
+   * Virtual mouse-clicks (virtualHeld) are folded in here too.
    */
   function computeActiveLayer() {
     let target = 0;
@@ -156,7 +190,19 @@
       const m = (slot.resolved.label_bottom || "").match(/L(\d+)/);
       if (m) target = parseInt(m[1], 10);
     }
+    for (const pos of virtualHeld) {
+      const slot = slotAt(pos);
+      if (!slot || slot.resolved.expanded_kind !== "layer-tap") continue;
+      const m = (slot.resolved.label_bottom || "").match(/L(\d+)/);
+      if (m) target = parseInt(m[1], 10);
+    }
     return target;
+  }
+
+  function slotAt(pos) {
+    if (!layout) return null;
+    const [r, c] = pos.split(":").map(Number);
+    return layout.layers[0]?.rows[r]?.keys[c] || null;
   }
 
   // ── Layer-name lookup ──────────────────────────────────────────────
@@ -165,28 +211,41 @@
   const layerName = (i) => _LAYER_NAMES[i] || "";
 
   function buildHeldChips() {
-    if (heldKeys.size === 0) {
+    const physChips = [...heldKeys].map((k) => {
+      const name = chipNameFor(k);
+      const slot = findOnBaseLayer(k);
+      const r = slot?.resolved;
+      if (r?.expanded_kind === "layer-tap") {
+        const m = (r.label_bottom || "").match(/L(\d+)/);
+        const target = m ? parseInt(m[1], 10) : null;
+        const nice = target !== null ? `L${target}${layerName(target) ? ` ${layerName(target)}` : ""}` : "?";
+        return `<span class="chip chip-layer">${escapeHtml(name)} <span class="chip-arrow">→</span> ${escapeHtml(nice)}</span>`;
+      }
+      if (r?.expanded_kind === "mod-tap") {
+        return `<span class="chip chip-mod">${escapeHtml(name)} <span class="chip-arrow">→</span> ${escapeHtml(r.hold || "")}</span>`;
+      }
+      const isMod = ["shift", "ctrl", "alt", "cmd"].includes(k.toLowerCase());
+      return `<span class="chip ${isMod ? "chip-bare-mod" : ""}">${escapeHtml(name)}</span>`;
+    });
+
+    const virtChips = [...virtualHeld].map((pos) => {
+      const slot = slotAt(pos);
+      if (!slot) return "";
+      const r = slot.resolved;
+      const baseName = r.label_top || "?";
+      if (r.expanded_kind === "layer-tap") {
+        const m = (r.label_bottom || "").match(/L(\d+)/);
+        const target = m ? parseInt(m[1], 10) : null;
+        const nice = target !== null ? `L${target}${layerName(target) ? ` ${layerName(target)}` : ""}` : "?";
+        return `<span class="chip chip-layer chip-virtual">${escapeHtml(baseName)} <span class="chip-arrow">→</span> ${escapeHtml(nice)} <span class="chip-virtual-tag">click</span></span>`;
+      }
+      return `<span class="chip chip-virtual">${escapeHtml(baseName)} <span class="chip-virtual-tag">click</span></span>`;
+    });
+
+    if (physChips.length === 0 && virtChips.length === 0) {
       return `<span class="chip chip-empty">none</span>`;
     }
-    return [...heldKeys]
-      .map((k) => {
-        const name = chipNameFor(k);
-        const slot = findOnBaseLayer(k);
-        const r = slot?.resolved;
-        if (r?.expanded_kind === "layer-tap") {
-          const m = (r.label_bottom || "").match(/L(\d+)/);
-          const target = m ? parseInt(m[1], 10) : null;
-          const nice = target !== null ? `L${target}${layerName(target) ? ` ${layerName(target)}` : ""}` : "?";
-          return `<span class="chip chip-layer">${escapeHtml(name)} <span class="chip-arrow">→</span> ${escapeHtml(nice)}</span>`;
-        }
-        if (r?.expanded_kind === "mod-tap") {
-          return `<span class="chip chip-mod">${escapeHtml(name)} <span class="chip-arrow">→</span> ${escapeHtml(r.hold || "")}</span>`;
-        }
-        // Plain modifier (shift, cmd, ctrl, alt) — render as a tag without arrow.
-        const isMod = ["shift", "ctrl", "alt", "cmd"].includes(k.toLowerCase());
-        return `<span class="chip ${isMod ? "chip-bare-mod" : ""}">${escapeHtml(name)}</span>`;
-      })
-      .join("");
+    return [...physChips, ...virtChips].join("");
   }
 
   /**
@@ -213,6 +272,20 @@
         if (!rowEl) continue;
         const cellAtCol = rowEl.querySelectorAll(".key")[s.col];
         if (cellAtCol) cellAtCol.classList.add("pressed");
+      }
+    }
+    // Virtual holds get their own marker class on top of .pressed so the user
+    // can tell "I clicked this" apart from "I'm pressing this".
+    for (const pos of virtualHeld) {
+      if (lit.has(pos)) continue;
+      lit.add(pos);
+      const [r, c] = pos.split(":").map(Number);
+      const rowEl = gridRoot.querySelector(`.row.row-${r}`);
+      if (!rowEl) continue;
+      const cellAtCol = rowEl.querySelectorAll(".key")[c];
+      if (cellAtCol) {
+        cellAtCol.classList.add("pressed");
+        cellAtCol.classList.add("pressed-virtual");
       }
     }
   }
@@ -299,11 +372,41 @@
     await ensureLayout();
     render();
     connect();
-    // One-time hover-tooltip wire-up. Delegation on the section means the
-    // listener survives the frequent innerHTML re-renders triggered by WS.
     if (window.keyTooltip) {
       window.keyTooltip.setupKeyTooltips(root, () => layout);
     }
+    wireClickToSimulate();
+  }
+
+  /**
+   * Click any layer-tap / mod-tap cell to toggle a virtual hold. Useful
+   * because QMK firmware doesn't emit any macOS event during a real LT
+   * hold (it just swaps the active layer internally) — so the only way
+   * to preview a layered layout without typing on it is to click.
+   */
+  function wireClickToSimulate() {
+    root.addEventListener("click", (e) => {
+      const cell = e.target.closest(".key");
+      if (!cell) return;
+      const rowEl = cell.closest(".row");
+      if (!rowEl) return;
+      const rowMatch = [...rowEl.classList].find((c) => c.startsWith("row-"));
+      if (!rowMatch) return;
+      const row = parseInt(rowMatch.slice(4), 10);
+      const col = parseInt(cell.dataset.col, 10);
+      if (Number.isNaN(row) || Number.isNaN(col) || !layout) return;
+      const baseSlot = layout.layers[0]?.rows[row]?.keys[col];
+      if (!baseSlot) return;
+      const kind = baseSlot.resolved.expanded_kind;
+      // Click is meaningful only on slots that DO something on hold.
+      if (kind !== "layer-tap" && kind !== "mod-tap" && kind !== "tap-dance") return;
+      const pos = `${row}:${col}`;
+      if (virtualHeld.has(pos)) virtualHeld.delete(pos);
+      else virtualHeld.add(pos);
+      const newLayer = computeActiveLayer();
+      if (newLayer !== activeLayer) activeLayer = newLayer;
+      render();
+    });
   }
 
   // Lazy-load: only fetch + connect once the Interactive tab is opened.

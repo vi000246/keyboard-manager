@@ -350,6 +350,19 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 
 .held-chips-big .chip-arrow { font-size: 0.95em; }
 
+/* Virtual-hold chip — dashed amber to mirror the on-grid marker */
+.held-chips .chip-virtual {
+  background: #2a1f0e !important;
+  border: 1px dashed #b8821f !important;
+  color: #facc15 !important;
+}
+.held-chips .chip-virtual-tag {
+  font-size: 0.65em;
+  opacity: 0.7;
+  font-style: italic;
+  margin-left: 0.3rem;
+}
+
 .held-chips .chip-empty      { color: #555; border-style: dashed; }
 .held-chips .chip-layer      { background: #1e3a2a; border-color: #4a8b6a; color: #c8f0d6; }
 .held-chips .chip-mod,
@@ -375,6 +388,23 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   background: #2a4d7a !important;
   opacity: 1;
   border-style: solid;
+}
+
+/* Virtual hold via mouse click — dashed border + amber tint distinguishes
+   "I clicked this" from "I'm physically pressing it". */
+.key.pressed-virtual {
+  background: #5b4a1f !important;
+  border-color: #f59e0b !important;
+  border-style: dashed !important;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* On the Interactive view, give layer-tap / mod-tap / tap-dance keys a
+   click cursor so the user discovers click-to-simulate naturally. */
+#view-interactive .key.kind-layer-tap,
+#view-interactive .key.kind-mod-tap,
+#view-interactive .key.kind-tap-dance {
+  cursor: pointer;
 }
 
 /* ── Key-detail tooltip (UI-6) ────────────────────────────────────── */
