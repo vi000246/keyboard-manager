@@ -347,4 +347,14 @@
   layerSelect.addEventListener("change", () => {
     if (loaded) reapplyOverlayForLayer();
   });
+
+  // Public surface for cross-module coordination (vial-upload.js).
+  window.statsDashboard = {
+    refresh: async () => {
+      if (!loaded) return;
+      // Invalidate the cached layout so the new .vil is picked up.
+      layout = null;
+      await refresh();
+    },
+  };
 })();

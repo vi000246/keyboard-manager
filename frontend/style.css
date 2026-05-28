@@ -200,6 +200,34 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .helper-badge.status-disconnected  { color: #f87171; }
 .helper-badge.status-loading       { color: #888; }
 
+/* Vial loader (UI-1) — sits in the top bar */
+.layout-source {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.layout-source button {
+  background: #2a2a2a;
+  color: #e5e5e5;
+  border: 1px solid #444;
+  padding: 0.35rem 0.7rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.layout-source button:hover  { border-color: #6a8fbe; background: #2a3a4d; }
+.layout-source button:disabled { opacity: 0.55; cursor: progress; }
+.layout-source button.hidden { display: none; }
+
+.layout-source .source-uploaded {
+  color: #fbbf24;
+  font-style: italic;
+  font-size: 0.75rem;
+}
+
 .meta {
   color: #999;
   font-size: 0.9rem;

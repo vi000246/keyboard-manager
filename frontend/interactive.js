@@ -167,4 +167,15 @@
         init();
       }
     });
+
+  // Public surface for cross-module coordination (vial-upload.js).
+  window.interactiveSim = {
+    refresh: async () => {
+      if (!initialized) return;
+      // Drop the cached layout so the new .vil is picked up.
+      layout = null;
+      await ensureLayout();
+      render();
+    },
+  };
 })();

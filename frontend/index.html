@@ -25,6 +25,16 @@
         <option value="5">5</option>
       </select>
     </label>
+    <div class="layout-source">
+      <button id="layout-upload-btn" type="button" title="Replace the active .vil with one from disk">
+        Load Vial…
+      </button>
+      <input id="layout-upload-input" type="file" accept=".vil,.json,application/json" hidden>
+      <button id="layout-revert-btn" type="button" class="hidden" title="Switch back to the default .vil">
+        Revert
+      </button>
+      <span id="layout-source-label"></span>
+    </div>
   </header>
 
   <main>
@@ -45,6 +55,7 @@
   <script src="heatmap.js"></script>
   <script src="stats.js"></script>
   <script src="interactive.js"></script>
+  <script src="vial-upload.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

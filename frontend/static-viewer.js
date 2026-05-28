@@ -44,6 +44,11 @@
   // Initial render
   show(0);
 
-  // Expose for debugging / Interactive module reuse
-  window.staticViewer = { show, getLayout: () => layoutCache };
+  // Expose for cross-module coordination (vial-upload.js calls refresh()
+  // after the user uploads a new .vil so all tabs reload in lockstep).
+  function refresh() {
+    layoutCache = null;
+    show(parseInt(layerSelect.value, 10) || 0);
+  }
+  window.staticViewer = { show, refresh, getLayout: () => layoutCache };
 })();

@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir \
     "fastapi>=0.115" \
     "uvicorn[standard]>=0.32" \
     "pydantic>=2.9" \
-    "websockets>=13"
+    "websockets>=13" \
+    "python-multipart>=0.0.9"
 
 # Copy backend source as a Python package — preserves `from .api.layout import ...`
 # style relative imports used in main.py.
