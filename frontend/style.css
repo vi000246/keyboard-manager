@@ -300,3 +300,60 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .interactive-status .status-connecting    { color: #fbbf24; }  /* amber */
 .interactive-status .status-disconnected  { color: #f87171; }  /* red */
 .interactive-status .status-error         { color: #f87171; }
+
+/* ── Held-key chips (UI-4) ────────────────────────────────────────── */
+
+.held-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+  min-height: 1.8rem;
+}
+
+.held-chips .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #1f2937;
+  color: #e5e5e5;
+  border: 1px solid #374151;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* Long contents (e.g. "Space → L1 NAV") truncate with an ellipsis instead
+     of wrapping inside the pill, so the row stays single-line per chip. */
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.held-chips .chip-empty      { color: #555; border-style: dashed; }
+.held-chips .chip-layer      { background: #1e3a2a; border-color: #4a8b6a; color: #c8f0d6; }
+.held-chips .chip-mod,
+.held-chips .chip-bare-mod   { background: #2a1f3a; border-color: #8a6abf; color: #ddc9f0; }
+.held-chips .chip-arrow      { opacity: 0.55; font-size: 0.85em; }
+
+/* ── Pressed key highlight on the grid (UI-4) ─────────────────────── */
+
+.key.pressed {
+  background: #4a7dba !important;
+  border-color: #6aa3ea !important;
+  color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(106, 163, 234, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: translateY(1px);
+}
+
+.key.pressed .label-bottom { color: #d6e8ff; }
+
+/* Even TRN / empty slots show "you are pressing here" when held — gives
+   feedback when the active layer doesn't have anything at that position. */
+.key.kind-transparent.pressed,
+.key.kind-empty.pressed {
+  background: #2a4d7a !important;
+  opacity: 1;
+  border-style: solid;
+}
