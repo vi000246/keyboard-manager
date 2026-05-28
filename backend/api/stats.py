@@ -10,6 +10,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query
 
+from ..db.app_names import friendly_name
 from ..db.heatmap_mapper import build_position_index, overlay_stats
 from ..db.repository import AppsRepo, StatsRepo
 from ..parsers.vial import parse
@@ -21,9 +22,21 @@ router = APIRouter()
 
 @router.get("/api/apps")
 def get_apps():
+    """List known apps sorted by total event count (DESC), with friendly names.
+
+    `display_name` is the macOS-friendly name when known (e.g. "Obsidian" for
+    `md.obsidian`); falls back to the last reverse-DNS segment for unknown
+    bundles. The frontend dropdown sorts by `total_count` for fast access to
+    the most-used apps.
+    """
     from ..main import DB_PATH
 
-    return AppsRepo(DB_PATH).all()
+    rows = AppsRepo(DB_PATH).all_with_counts()
+    # Prefer a stored display_name if the helper / importer ever sets one;
+    # otherwise fall back to the static mapping.
+    for r in rows:
+        r["display_name"] = r.get("display_name") or friendly_name(r["bundle_id"])
+    return rows
 
 
 @router.get("/api/stats/heatmap")

@@ -157,16 +157,31 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   color: #aaa;
 }
 
-.stats-toolbar select {
-  margin-left: 0.4rem;
+.stats-toolbar select,
+.stats-toolbar input[type="search"] {
   background: #222;
   color: #e5e5e5;
   border: 1px solid #444;
   padding: 0.3rem 0.6rem;
   border-radius: 4px;
   font: inherit;
-  min-width: 14rem;
 }
+
+.stats-toolbar select {
+  margin-left: 0.4rem;
+  min-width: 16rem;
+}
+
+.stats-toolbar .app-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.stats-toolbar input[type="search"] {
+  width: 11rem;
+}
+.stats-toolbar input[type="search"]::placeholder { color: #666; }
 
 .meta {
   color: #999;

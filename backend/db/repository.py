@@ -88,6 +88,33 @@ class AppsRepo(_BaseRepo):
             ).fetchall()
             return [dict(r) for r in rows]
 
+    def all_with_counts(self) -> list[dict]:
+        """Return every known app plus its total event count, sorted DESC by count.
+
+        Used by the Stats dropdown to order by usage and to show a count badge.
+        Apps with zero events still appear (after the counted ones) so newly
+        seen bundles aren't hidden until they accumulate stats.
+        """
+        with self._conn() as c:
+            rows = c.execute(
+                """
+                SELECT a.bundle_id,
+                       a.display_name,
+                       a.bucket,
+                       a.first_seen_ts,
+                       a.last_seen_ts,
+                       COALESCE(e.total, 0) AS total_count
+                FROM apps a
+                LEFT JOIN (
+                  SELECT app_bundle, SUM(count) AS total
+                  FROM events
+                  GROUP BY app_bundle
+                ) e ON e.app_bundle = a.bundle_id
+                ORDER BY total_count DESC, a.bundle_id ASC
+                """
+            ).fetchall()
+            return [dict(r) for r in rows]
+
 
 class StatsRepo(_BaseRepo):
     """Read-only aggregation queries over the events table."""

@@ -48,6 +48,26 @@ def test_apps_endpoint_includes_bucket(client):
     assert iterm["bucket"] == "terminal"
 
 
+def test_apps_endpoint_includes_display_name(client):
+    apps = client.get("/api/apps").json()
+    iterm = next(a for a in apps if a["bundle_id"] == "com.googlecode.iterm2")
+    assert iterm["display_name"] == "iTerm"
+    brave = next(a for a in apps if a["bundle_id"] == "com.brave.Browser")
+    assert brave["display_name"] == "Brave"
+
+
+def test_apps_endpoint_includes_total_count(client):
+    apps = client.get("/api/apps").json()
+    iterm = next(a for a in apps if a["bundle_id"] == "com.googlecode.iterm2")
+    # Fixture iterm: j=5892, k=2314, cmd+v=3 → 8209 total events
+    assert iterm["total_count"] == 5892 + 2314 + 3
+
+
+def test_apps_endpoint_sorted_by_total_count_desc(client):
+    counts = [a["total_count"] for a in client.get("/api/apps").json()]
+    assert counts == sorted(counts, reverse=True)
+
+
 def test_stats_top_n_per_app(client):
     r = client.get("/api/stats?app=com.googlecode.iterm2&top=5&kind=single")
     assert r.status_code == 200

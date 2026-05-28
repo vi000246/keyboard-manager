@@ -34,16 +34,30 @@
 
   // ── Render fragments ────────────────────────────────────────────────
 
+  // Last user-entered search query — preserved across re-renders.
+  let appFilter = "";
+
+  function filteredApps() {
+    if (!appFilter) return apps;
+    const q = appFilter.toLowerCase();
+    return apps.filter(
+      (a) =>
+        (a.display_name || "").toLowerCase().includes(q) ||
+        a.bundle_id.toLowerCase().includes(q) ||
+        (a.bucket || "").toLowerCase().includes(q)
+    );
+  }
+
   function renderToolbar(currentApp, currentKind) {
-    const opts = ['<option value="">All apps</option>']
-      .concat(
-        apps.map((a) => {
-          const sel = a.bundle_id === currentApp ? "selected" : "";
-          const label = `${a.bundle_id}${a.bucket ? ` (${a.bucket})` : ""}`;
-          return `<option value="${escapeAttr(a.bundle_id)}" ${sel}>${escapeHtml(label)}</option>`;
-        })
-      )
-      .join("");
+    const opts = ['<option value="">All apps</option>'].concat(
+      filteredApps().map((a) => {
+        const sel = a.bundle_id === currentApp ? "selected" : "";
+        const count = (a.total_count || 0).toLocaleString();
+        const bucket = a.bucket ? ` · ${a.bucket}` : "";
+        const label = `${a.display_name}${bucket}  (${count})`;
+        return `<option value="${escapeAttr(a.bundle_id)}" ${sel}>${escapeHtml(label)}</option>`;
+      })
+    ).join("");
     const kinds = [
       ["single", "Single keys"],
       ["mod", "Mod combos"],
@@ -53,7 +67,12 @@
       .join("");
     return `
       <div class="stats-toolbar">
-        <label>App: <select id="stats-app">${opts}</select></label>
+        <label class="app-picker">
+          App:
+          <input id="stats-app-search" type="search" placeholder="filter…"
+                 value="${escapeAttr(appFilter)}" autocomplete="off">
+          <select id="stats-app">${opts}</select>
+        </label>
         <label>Kind: <select id="stats-kind">${kinds}</select></label>
       </div>`;
   }
@@ -144,13 +163,48 @@
   function wire() {
     const sel = root.querySelector("#stats-app");
     const kindSel = root.querySelector("#stats-kind");
+    const searchInput = root.querySelector("#stats-app-search");
     if (sel) sel.addEventListener("change", refresh);
     if (kindSel) kindSel.addEventListener("change", refresh);
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        appFilter = e.target.value;
+        // Only re-render the dropdown — don't re-fetch stats while the user types.
+        rerenderToolbarOnly(sel ? sel.value || null : null, kindSel ? kindSel.value : "single");
+      });
+    }
 
-    // Bidirectional highlight (task 3.4)
+    // Bidirectional highlight
     const table = root.querySelector(".stats-table");
     const grid = root.querySelector("#stats-grid");
     if (grid && table) wireBidirectional(grid, table);
+  }
+
+  function rerenderToolbarOnly(currentApp, currentKind) {
+    const toolbar = root.querySelector(".stats-toolbar");
+    if (!toolbar) return;
+    toolbar.outerHTML = renderToolbar(currentApp, currentKind);
+    // Restore focus + caret position to the search input so typing isn't interrupted
+    const restored = root.querySelector("#stats-app-search");
+    if (restored) {
+      restored.focus();
+      // Put caret at end
+      const v = restored.value;
+      restored.value = "";
+      restored.value = v;
+    }
+    // Re-wire just the new toolbar inputs
+    const sel = root.querySelector("#stats-app");
+    const kindSel = root.querySelector("#stats-kind");
+    const searchInput = root.querySelector("#stats-app-search");
+    if (sel) sel.addEventListener("change", refresh);
+    if (kindSel) kindSel.addEventListener("change", refresh);
+    if (searchInput) {
+      searchInput.addEventListener("input", (e) => {
+        appFilter = e.target.value;
+        rerenderToolbarOnly(sel ? sel.value || null : null, kindSel ? kindSel.value : "single");
+      });
+    }
   }
 
   function wireBidirectional(gridEl, tableEl) {
