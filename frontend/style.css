@@ -218,3 +218,25 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   0%, 100% { box-shadow: 0 0 0 0 rgba(74, 125, 186, 0); }
   30%      { box-shadow: 0 0 0 6px rgba(74, 125, 186, 0.7); }
 }
+
+/* ── Interactive simulator status bar ─────────────────────────────── */
+
+.interactive-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #aaa;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 0.5rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.interactive-status .sep { color: #555; }
+.interactive-status .status { font-size: 1rem; }
+.interactive-status .status-connected     { color: #4ade80; }  /* green */
+.interactive-status .status-connecting    { color: #fbbf24; }  /* amber */
+.interactive-status .status-disconnected  { color: #f87171; }  /* red */
+.interactive-status .status-error         { color: #f87171; }

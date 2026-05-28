@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI
 
 from .api.layout import router as layout_router
+from .api.live import router as live_router
 from .api.stats import router as stats_router
 from .db.migrations import ensure_schema
 
@@ -26,6 +27,7 @@ ensure_schema(DB_PATH)
 
 app.include_router(layout_router)
 app.include_router(stats_router)
+app.include_router(live_router)
 
 
 @app.get("/health")

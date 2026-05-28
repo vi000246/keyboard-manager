@@ -16,7 +16,13 @@ services:
       - VIAL_PATH=/data/mylayout.vil
       - DB_PATH=/data/db/keystat.db
       # native-helper runs on the macOS host; backend reaches it via host.docker.internal
-      - HELPER_WS_URL=ws://host.docker.internal:8765
+      # 8766 to avoid clash with Hammerspoon's hs.httpserver on 8765.
+      - HELPER_WS_URL=${HELPER_WS_URL:-ws://host.docker.internal:8766}
+    # Belt-and-braces: Docker Desktop on macOS resolves host.docker.internal
+    # automatically, but the explicit mapping helps with Colima/older Compose
+    # and documents the requirement.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   frontend:
