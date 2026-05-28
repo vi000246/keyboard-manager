@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.keyboard-manager.git-backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/logan/Projects/keyboard-manager/scripts/git-backup/backup.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/logan/Projects/keyboard-manager</string>
+
+  <!-- launchctl needs the standard PATH for `gh`, `sqlite3`, `git` to resolve. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>/Users/logan</string>
+  </dict>
+
+  <!-- Run daily at 03:30 local. If the Mac was asleep, launchd fires the
+       missed run on next wake. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <!-- One-off retry on next run if the backup script exits non-zero (push
+       failures land here when offline). -->
+  <key>ThrottleInterval</key>
+  <integer>60</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/keyboard-manager-git-backup.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/keyboard-manager-git-backup.err.log</string>
+</dict>
+</plist>
