@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: km-backend
     ports:
-      - "8000:8000"
+      # 8001 on host (8000 is commonly occupied); 8000 inside the container.
+      - "${KM_BACKEND_PORT:-8001}:8000"
     volumes:
       # Vial config — read-only mount
       - ${VIAL_CONFIG:-${HOME}/Projects/keyboard-map/mylayout.vil}:/data/mylayout.vil:ro
@@ -24,7 +25,7 @@ services:
       dockerfile: Dockerfile
     container_name: km-frontend
     ports:
-      - "8080:80"
+      - "${KM_FRONTEND_PORT:-8081}:80"
     depends_on:
       - backend
     environment:

@@ -14,7 +14,7 @@
       <button data-view="interactive">Interactive</button>
       <button data-view="stats">Stats</button>
     </nav>
-    <label>
+    <label class="layer-picker">
       Layer:
       <select id="layer-select">
         <option value="0">0 — BASE</option>
@@ -29,7 +29,7 @@
 
   <main>
     <section id="view-static" class="view">
-      <p class="placeholder">M1 — Static Viewer renders here. Backend: <code>GET /api/layout</code>.</p>
+      <p class="placeholder">loading layout…</p>
     </section>
     <section id="view-interactive" class="view hidden">
       <p class="placeholder">M4 — Interactive simulator. WebSocket subscribes to native-helper events.</p>
@@ -39,6 +39,9 @@
     </section>
   </main>
 
+  <script src="keycode-format.js"></script>
+  <script src="grid-render.js"></script>
+  <script src="static-viewer.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
