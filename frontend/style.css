@@ -61,6 +61,20 @@ main { padding: 2rem; max-width: 1400px; margin: 0 auto; }
 .error { color: #ff7070; }
 code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
+/* ── Static Viewer: stacked layers ────────────────────────────────── */
+
+.layer-block + .layer-block { margin-top: 2.5rem; }
+.layer-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin: 0 0 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #2a2a2a;
+  padding-bottom: 0.4rem;
+}
+
 /* ── Keyboard grid ─────────────────────────────────────────────────── */
 
 .keyboard {

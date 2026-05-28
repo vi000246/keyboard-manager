@@ -1,10 +1,30 @@
-// static-viewer.js — Static Viewer page: GET /api/layout, render selected layer.
+// static-viewer.js — Static Viewer page: render every USED layer in one
+// scrollable stack. A layer is "used" if it has at least one slot that isn't
+// transparent or empty — Vial always produces 6 layers in the .vil but most
+// of them are TRN-only placeholders, and showing them all just adds noise.
 (function () {
   "use strict";
 
   const container = document.getElementById("view-static");
   const layerSelect = document.getElementById("layer-select");
   let layoutCache = null;
+
+  // Mirrors the dropdown option text in index.html — keep in sync if a layer
+  // gets renamed there.
+  const LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
+
+  function isLayerUsed(layer) {
+    for (const row of layer.rows) {
+      for (const k of row.keys) {
+        if (!k) continue;
+        const kind = k.resolved?.expanded_kind;
+        if (kind && kind !== "transparent" && kind !== "empty") {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
   async function ensureLayout() {
     if (layoutCache) return layoutCache;
@@ -22,33 +42,60 @@
     }
   }
 
-  async function show(layerIdx) {
+  async function show() {
     const layout = await ensureLayout();
     if (!layout) return;
-    const layer = layout.layers[layerIdx];
-    if (!layer) {
-      container.innerHTML = renderError(`layer ${layerIdx} not present`);
+
+    const usedLayers = layout.layers.filter(isLayerUsed);
+    if (usedLayers.length === 0) {
+      container.innerHTML = renderError("no populated layers found in .vil");
       return;
     }
-    container.innerHTML = window.gridRender.renderLayer(layer);
+
+    container.innerHTML = usedLayers
+      .map((layer) => {
+        const name = LAYER_NAMES[layer.index] || "";
+        const title = name ? `Layer ${layer.index} — ${name}` : `Layer ${layer.index}`;
+        return `
+          <section class="layer-block">
+            <h2 class="layer-title">${escapeHtml(title)}</h2>
+            ${window.gridRender.renderLayer(layer)}
+          </section>`;
+      })
+      .join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function renderError(msg) {
     return `<p class="error">${msg}</p>`;
   }
 
-  layerSelect.addEventListener("change", () => {
-    show(parseInt(layerSelect.value, 10));
+  // Hide the global layer dropdown while Static Viewer owns the screen —
+  // the page shows every used layer, so the picker is meaningless here.
+  function updateLayerPickerVisibility() {
+    const isActive = !document.getElementById("view-static").classList.contains("hidden");
+    const picker = layerSelect.closest("label.layer-picker");
+    if (picker) picker.style.visibility = isActive ? "hidden" : "";
+  }
+
+  document.querySelectorAll("nav button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      // Defer so the .hidden class change in app.js has settled.
+      setTimeout(updateLayerPickerVisibility, 0);
+    });
   });
 
-  // Initial render
-  show(0);
+  // Initial render + picker state
+  show();
+  updateLayerPickerVisibility();
 
-  // Expose for cross-module coordination (vial-upload.js calls refresh()
-  // after the user uploads a new .vil so all tabs reload in lockstep).
+  // Public surface for cross-module coordination (vial-upload.js).
   function refresh() {
     layoutCache = null;
-    show(parseInt(layerSelect.value, 10) || 0);
+    show();
   }
   window.staticViewer = { show, refresh, getLayout: () => layoutCache };
 })();
