@@ -1,0 +1,148 @@
+"""Layout API integration tests.
+
+Each test uses a fresh `TestClient` so the module reload picks up the
+`VIAL_PATH` env var set per-test.
+"""
+import importlib
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+FIXTURE = Path(__file__).parent / "fixtures" / "mylayout.vil"
+
+
+def _client(monkeypatch, vial_path):
+    """Reload backend.main so module-level VIAL_PATH picks up the env override."""
+    monkeypatch.setenv("VIAL_PATH", str(vial_path))
+    # Clear the layout cache between tests
+    from backend.api import layout
+    layout._cache.clear()
+    from backend import main as backend_main
+    importlib.reload(backend_main)
+    return TestClient(backend_main.app)
+
+
+@pytest.fixture
+def client(monkeypatch):
+    return _client(monkeypatch, FIXTURE)
+
+
+def test_layout_ok(client):
+    r = client.get("/api/layout")
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body["layers"]) == 6
+    first = body["layers"][0]["rows"][0]["keys"][0]
+    assert first["raw"] == "KC_GRAVE"
+    assert first["resolved"]["label_top"] == "`"
+
+
+def test_layout_resolves_tap_dance_keys(client):
+    body = client.get("/api/layout").json()
+    # mylayout.vil layer 0 has TD(3) and TD(1) at known positions; find any TD(*) on layer 0
+    td_keys = [
+        k
+        for row in body["layers"][0]["rows"]
+        for k in row["keys"]
+        if k is not None and k["raw"].startswith("TD(")
+    ]
+    assert td_keys, "expected at least one TD(*) in layer 0"
+    for k in td_keys:
+        r = k["resolved"]
+        assert r["expanded_kind"] == "tap-dance"
+        assert r["tap"] is not None
+        assert isinstance(r["branches"], list) and len(r["branches"]) == 4
+
+
+def test_layout_resolves_all_t_space(client):
+    body = client.get("/api/layout").json()
+    # mylayout.vil layer 0 row 4 col 4 = ALL_T(KC_SPACE)
+    all_t = next(
+        (k for row in body["layers"][0]["rows"]
+         for k in row["keys"]
+         if k is not None and k["raw"] == "ALL_T(KC_SPACE)"),
+        None,
+    )
+    assert all_t is not None, "ALL_T(KC_SPACE) should be in layer 0"
+    assert all_t["resolved"]["expanded_kind"] == "mod-tap"
+    assert all_t["resolved"]["tap"] == "Space"
+    assert all_t["resolved"]["hold"] == "Hyper"
+
+
+def test_layout_resolves_lt1_tab(client):
+    body = client.get("/api/layout").json()
+    lt_keys = [
+        k
+        for row in body["layers"][0]["rows"]
+        for k in row["keys"]
+        if k is not None and k["raw"] == "LT1(KC_TAB)"
+    ]
+    assert lt_keys, "LT1(KC_TAB) should be in layer 0"
+    r = lt_keys[0]["resolved"]
+    assert r["expanded_kind"] == "layer-tap"
+    assert r["label_top"] == "Tab"
+    assert r["label_bottom"] == "→L1"
+
+
+def test_layout_empty_slot_serializes_as_null(client):
+    body = client.get("/api/layout").json()
+    # mylayout.vil layer 0 row 0 col 6 is -1 (no inner col on num row)
+    assert body["layers"][0]["rows"][0]["keys"][6] is None
+
+
+def test_layout_keycodes_endpoint(client):
+    r = client.get("/api/layout/keycodes")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["KC_GRAVE"] == "`"
+    assert body["KC_SPACE"] == "Space"
+
+
+def test_layout_503_when_vial_missing(monkeypatch, tmp_path):
+    c = _client(monkeypatch, tmp_path / "absent.vil")
+    r = c.get("/api/layout")
+    assert r.status_code == 503
+    assert r.json()["detail"]["error"] == "VIAL_NOT_FOUND"
+
+
+def test_layout_422_on_unsupported_protocol(monkeypatch, tmp_path):
+    bad = tmp_path / "bad.vil"
+    bad.write_text('{"vial_protocol": 99, "version": 1, "layout": []}')
+    c = _client(monkeypatch, bad)
+    r = c.get("/api/layout")
+    assert r.status_code == 422
+    assert r.json()["detail"]["error"] == "VIAL_PARSE_ERROR"
+
+
+def test_health_endpoint_reports_vial_exists(client):
+    r = client.get("/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["vial_exists"] is True
+
+
+def test_mylayout_full_keycode_coverage(client):
+    """M1 acceptance gate (task 1.5).
+
+    Every non-empty, non-transparent key in mylayout.vil must have a
+    non-empty label_top. Fall-throughs to expanded_kind='unknown' are
+    permitted only if label_top is non-empty (e.g. an unrecognised but
+    still printable token); a None label_top fails the gate.
+    """
+    body = client.get("/api/layout").json()
+    missing: list[tuple[int, int, int, str]] = []
+    for layer in body["layers"]:
+        for row in layer["rows"]:
+            for col, k in enumerate(row["keys"]):
+                if k is None:
+                    continue
+                r = k["resolved"]
+                if r["expanded_kind"] in ("transparent", "empty"):
+                    continue
+                if not r["label_top"]:
+                    missing.append((layer["index"], row["row"], col, k["raw"]))
+    assert not missing, (
+        f"missing label_top for {len(missing)} keys; first 20: {missing[:20]}"
+    )
