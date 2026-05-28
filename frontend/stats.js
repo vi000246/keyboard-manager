@@ -3,12 +3,19 @@
   "use strict";
 
   const root = document.getElementById("view-stats");
-  const layerSelect = document.getElementById("layer-select");
+  // Layer dropdown now lives inside this view (used to be a global element
+  // in the header — only Stats really needed it).
+  const LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
   let apps = [];
   let layout = null;
   let loaded = false;
   let lastHeatmap = null;
   let lastStats = null;
+  let currentLayer = 0;
+
+  function getLayerSelect() {
+    return root.querySelector("#stats-layer");
+  }
 
   async function loadApps() {
     const r = await fetch("/api/apps");
@@ -65,6 +72,11 @@
     ]
       .map(([v, l]) => `<option value="${v}" ${v === currentKind ? "selected" : ""}>${l}</option>`)
       .join("");
+    const layerOpts = LAYER_NAMES.map((name, i) => {
+      const label = name ? `${i} — ${name}` : `${i}`;
+      const sel = i === currentLayer ? "selected" : "";
+      return `<option value="${i}" ${sel}>${label}</option>`;
+    }).join("");
     return `
       <div class="stats-toolbar">
         <label class="app-picker">
@@ -74,6 +86,7 @@
           <select id="stats-app">${opts}</select>
         </label>
         <label>Kind: <select id="stats-kind">${kinds}</select></label>
+        <label>Layer: <select id="stats-layer">${layerOpts}</select></label>
         <span id="helper-status-slot"></span>
       </div>`;
   }
@@ -190,11 +203,10 @@
 
     // Render the keyboard grid for the currently-selected layer, then overlay
     const gridSlot = root.querySelector("#stats-grid");
-    const layerIdx = parseInt(layerSelect.value, 10) || 0;
     if (gridSlot && lay) {
-      gridSlot.innerHTML = window.gridRender.renderLayer(lay.layers[layerIdx]);
+      gridSlot.innerHTML = window.gridRender.renderLayer(lay.layers[currentLayer]);
       if (window.heatmap && heatmap) {
-        window.heatmap.applyOverlay(gridSlot, heatmap, layerIdx);
+        window.heatmap.applyOverlay(gridSlot, heatmap, currentLayer);
       }
     }
     wire();
@@ -204,11 +216,12 @@
 
   function reapplyOverlayForLayer() {
     const gridSlot = root.querySelector("#stats-grid");
-    const layerIdx = parseInt(layerSelect.value, 10) || 0;
+    const sel = getLayerSelect();
+    currentLayer = sel ? parseInt(sel.value, 10) || 0 : currentLayer;
     if (gridSlot && layout) {
-      gridSlot.innerHTML = window.gridRender.renderLayer(layout.layers[layerIdx]);
+      gridSlot.innerHTML = window.gridRender.renderLayer(layout.layers[currentLayer]);
       if (window.heatmap && lastHeatmap) {
-        window.heatmap.applyOverlay(gridSlot, lastHeatmap, layerIdx);
+        window.heatmap.applyOverlay(gridSlot, lastHeatmap, currentLayer);
       }
     }
   }
@@ -216,9 +229,16 @@
   function wire() {
     const sel = root.querySelector("#stats-app");
     const kindSel = root.querySelector("#stats-kind");
+    const layerSel = root.querySelector("#stats-layer");
     const searchInput = root.querySelector("#stats-app-search");
     if (sel) sel.addEventListener("change", refresh);
     if (kindSel) kindSel.addEventListener("change", refresh);
+    if (layerSel) {
+      layerSel.addEventListener("change", () => {
+        currentLayer = parseInt(layerSel.value, 10) || 0;
+        reapplyOverlayForLayer();
+      });
+    }
     if (searchInput) {
       searchInput.addEventListener("input", (e) => {
         appFilter = e.target.value;
@@ -249,9 +269,16 @@
     // Re-wire just the new toolbar inputs
     const sel = root.querySelector("#stats-app");
     const kindSel = root.querySelector("#stats-kind");
+    const layerSel = root.querySelector("#stats-layer");
     const searchInput = root.querySelector("#stats-app-search");
     if (sel) sel.addEventListener("change", refresh);
     if (kindSel) kindSel.addEventListener("change", refresh);
+    if (layerSel) {
+      layerSel.addEventListener("change", () => {
+        currentLayer = parseInt(layerSel.value, 10) || 0;
+        reapplyOverlayForLayer();
+      });
+    }
     if (searchInput) {
       searchInput.addEventListener("input", (e) => {
         appFilter = e.target.value;
@@ -343,10 +370,8 @@
     }
   });
 
-  // React to layer dropdown changes while Stats tab is active.
-  layerSelect.addEventListener("change", () => {
-    if (loaded) reapplyOverlayForLayer();
-  });
+  // (The Stats-page layer dropdown is wired inside `wire()` now — it lives
+  //  in the toolbar, not the global header.)
 
   // Public surface for cross-module coordination (vial-upload.js).
   window.statsDashboard = {

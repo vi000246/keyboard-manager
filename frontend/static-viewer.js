@@ -6,7 +6,6 @@
   "use strict";
 
   const container = document.getElementById("view-static");
-  const layerSelect = document.getElementById("layer-select");
   let layoutCache = null;
 
   // Mirrors the dropdown option text in index.html — keep in sync if a layer
@@ -73,24 +72,9 @@
     return `<p class="error">${msg}</p>`;
   }
 
-  // Hide the global layer dropdown while Static Viewer owns the screen —
-  // the page shows every used layer, so the picker is meaningless here.
-  function updateLayerPickerVisibility() {
-    const isActive = !document.getElementById("view-static").classList.contains("hidden");
-    const picker = layerSelect.closest("label.layer-picker");
-    if (picker) picker.style.visibility = isActive ? "hidden" : "";
-  }
-
-  document.querySelectorAll("nav button").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      // Defer so the .hidden class change in app.js has settled.
-      setTimeout(updateLayerPickerVisibility, 0);
-    });
-  });
-
-  // Initial render + picker state
+  // Initial render — the global header picker no longer exists, so we just
+  // show every used layer immediately.
   show();
-  updateLayerPickerVisibility();
 
   // One-time hover-tooltip wire-up. Event delegation on the section means
   // re-renders inside it don't drop the listener.

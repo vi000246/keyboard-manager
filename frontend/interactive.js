@@ -72,21 +72,76 @@
     return k;
   }
 
+  // Modifier event keys are pressed by physical positions whose label doesn't
+  // necessarily equal the event-key name. We need a separate matcher for them.
+  const MODIFIER_EVENT_KEYS = new Set(["shift", "ctrl", "alt", "cmd"]);
+  const MOD_NAMES = {
+    shift: "Shift",
+    ctrl:  "Ctrl",
+    alt:   "Alt",
+    cmd:   "Cmd",
+  };
+
   /**
-   * For a held event-key, find its BASE-layer slot. Used both for layer
-   * resolution and for building the chip's "what does hold do" preview.
+   * Find every BASE-layer slot a held event-key could correspond to.
+   *
+   * Multiple positions can produce the same event (e.g. TD(3) tap=Tab AND
+   * LT1(KC_TAB) tap=Tab both send "tab"). Returns the layer-tap match first
+   * if any, then mod-tap, then plain — so callers can pick the most relevant.
    */
-  function findOnBaseLayer(eventKey) {
-    if (!layout) return null;
-    const label = labelFor(eventKey);
-    if (label === null) return null;
+  function findAllBaseSlots(eventKey) {
+    if (!layout) return [];
     const base = layout.layers[0];
-    for (const row of base.rows) {
-      for (const k of row.keys) {
-        if (k && k.resolved.label_top === label) return k;
+    const label = labelFor(eventKey);
+    const isMod = MODIFIER_EVENT_KEYS.has(eventKey.toLowerCase());
+    const modName = isMod ? MOD_NAMES[eventKey.toLowerCase()] : null;
+
+    const matches = [];
+    for (let r = 0; r < base.rows.length; r++) {
+      const row = base.rows[r];
+      for (let c = 0; c < row.keys.length; c++) {
+        const k = row.keys[c];
+        if (!k) continue;
+        const res = k.resolved;
+        const kind = res.expanded_kind;
+
+        // Direct label match (covers plain letters, layer-tap tap, mod-tap tap, etc.).
+        if (label && res.label_top === label) {
+          matches.push({ key: k, row: r, col: c, kind, reason: "label" });
+          continue;
+        }
+
+        // Modifier-by-hold: holding "cmd" highlights any position whose hold
+        // action sends Cmd — covers LGUI_T(...), ALL_T(...) (Hyper expands),
+        // TD(N) whose hold branch is a modifier, etc.
+        if (modName) {
+          const hold = res.hold || "";
+          const holdMatchesMod =
+            hold === modName ||
+            (hold === "Hyper" && ["Cmd", "Ctrl", "Alt", "Shift"].includes(modName)) ||
+            (hold === "Meh"   && ["Ctrl", "Alt", "Shift"].includes(modName));
+          if ((kind === "mod-tap" || kind === "tap-dance") && holdMatchesMod) {
+            matches.push({ key: k, row: r, col: c, kind, reason: "hold-mod" });
+            continue;
+          }
+          // Plain modifier keys (KC_LSHIFT label="LShift", KC_RSHIFT="RShift").
+          if (kind === "plain" && res.label_top && res.label_top.endsWith(modName)) {
+            matches.push({ key: k, row: r, col: c, kind, reason: "plain-mod" });
+          }
+        }
       }
     }
-    return null;
+
+    // Sort: layer-tap > mod-tap > others (so the *first* result is the most
+    // useful one for layer activation and pressed-highlight position).
+    const rank = { "layer-tap": 0, "mod-tap": 1 };
+    matches.sort((a, b) => (rank[a.kind] ?? 9) - (rank[b.kind] ?? 9));
+    return matches;
+  }
+
+  function findOnBaseLayer(eventKey) {
+    const matches = findAllBaseSlots(eventKey);
+    return matches.length > 0 ? matches[0].key : null;
   }
 
   /**
@@ -105,8 +160,7 @@
   }
 
   // ── Layer-name lookup ──────────────────────────────────────────────
-  // Mirrors the <option> labels in index.html for the global layer-select,
-  // so the status bar can show "NAV" instead of just "1".
+  // Friendly layer-index → name, for the status bar.
   const _LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
   const layerName = (i) => _LAYER_NAMES[i] || "";
 
@@ -135,46 +189,30 @@
       .join("");
   }
 
-  /** Add `.pressed` to every grid cell whose label_top matches a held key. */
+  /**
+   * Add `.pressed` to every BASE-layer slot that the held keys could be
+   * coming from. Crucially we light up the SLOT position (via row/col),
+   * which works regardless of which layer's content the grid is currently
+   * rendering — so holding Tab on LT1 will glow even when the grid has
+   * switched to NAV (where that position is TRN).
+   */
   function applyPressed(gridRoot) {
     gridRoot.querySelectorAll(".key.pressed").forEach((k) =>
       k.classList.remove("pressed")
     );
     if (heldKeys.size === 0) return;
-    // Walk the cells once; build label→[elements] map.
-    const cells = gridRoot.querySelectorAll(".key");
+
+    const lit = new Set();
     for (const held of heldKeys) {
-      const label = labelFor(held);
-      if (label === null) continue;
-      for (const k of cells) {
-        if (k.querySelector(".label-top")?.textContent?.trim() === label) {
-          k.classList.add("pressed");
-        }
-      }
-      // If the layout switched to a layer where the trigger position renders
-      // as TRN/empty, still light up the BASE slot's (row, col) for feedback.
-      const slot = findOnBaseLayer(held);
-      if (slot) {
-        // BASE layer's flat (row, col) — walk rendered .row .key cells.
-        const baseLayer = layout.layers[0];
-        let baseRow = -1, baseCol = -1;
-        for (let r = 0; r < baseLayer.rows.length; r++) {
-          for (let c = 0; c < baseLayer.rows[r].keys.length; c++) {
-            if (baseLayer.rows[r].keys[c] === slot) {
-              baseRow = r;
-              baseCol = c;
-              break;
-            }
-          }
-          if (baseRow !== -1) break;
-        }
-        if (baseRow !== -1) {
-          const rowEl = gridRoot.querySelector(`.row.row-${baseRow}`);
-          if (rowEl) {
-            const cellAtCol = rowEl.querySelectorAll(".key")[baseCol];
-            if (cellAtCol) cellAtCol.classList.add("pressed");
-          }
-        }
+      const slots = findAllBaseSlots(held);
+      for (const s of slots) {
+        const cellKey = `${s.row}:${s.col}`;
+        if (lit.has(cellKey)) continue;
+        lit.add(cellKey);
+        const rowEl = gridRoot.querySelector(`.row.row-${s.row}`);
+        if (!rowEl) continue;
+        const cellAtCol = rowEl.querySelectorAll(".key")[s.col];
+        if (cellAtCol) cellAtCol.classList.add("pressed");
       }
     }
   }
@@ -194,11 +232,10 @@
         <span class="sep">·</span>
         <span>layer: <strong>${activeLayer}${layerLbl ? ` ${layerLbl}` : ""}</strong></span>
       </div>
-      <div class="held-chips" aria-label="currently held keys">
+      ${gridHtml}
+      <div class="held-chips held-chips-big" aria-label="currently held keys">
         ${buildHeldChips()}
-      </div>
-      ${gridHtml}`;
-    // Paint the grid AFTER it's in the DOM.
+      </div>`;
     const gridRoot = root.querySelector(".keyboard");
     if (gridRoot) applyPressed(gridRoot);
   }

@@ -38,22 +38,6 @@ nav button {
 nav button:hover { color: #e5e5e5; border-color: #555; }
 nav button.active { background: #2a4d7a; color: #fff; border-color: #4a7dba; }
 
-.layer-picker {
-  margin-left: auto;
-  font-size: 0.9rem;
-  color: #999;
-}
-
-.layer-picker select {
-  margin-left: 0.5rem;
-  background: #222;
-  color: #e5e5e5;
-  border: 1px solid #444;
-  padding: 0.3rem 0.6rem;
-  border-radius: 4px;
-  font: inherit;
-}
-
 main { padding: 2rem; max-width: 1400px; margin: 0 auto; }
 .view.hidden { display: none; }
 
@@ -214,12 +198,14 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .helper-badge.status-disconnected  { color: #f87171; }
 .helper-badge.status-loading       { color: #888; }
 
-/* Vial loader (UI-1) — sits in the top bar */
+/* Vial loader (UI-1) — sits in the top bar (now also pushes itself right
+   since the layer picker that used to do that has moved into Stats). */
 .layout-source {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
+  margin-left: auto;
 }
 
 .layout-source button {
@@ -344,6 +330,25 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Big variant — used below the Interactive keyboard so the current trigger
+   is unmistakably visible. */
+.held-chips-big {
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 1.5rem 0 0;
+  min-height: 3rem;
+}
+
+.held-chips-big .chip {
+  font-size: 1.15rem;
+  padding: 0.5rem 1.1rem;
+  gap: 0.5rem;
+  max-width: 28rem;
+  font-weight: 500;
+}
+
+.held-chips-big .chip-arrow { font-size: 0.95em; }
 
 .held-chips .chip-empty      { color: #555; border-style: dashed; }
 .held-chips .chip-layer      { background: #1e3a2a; border-color: #4a8b6a; color: #c8f0d6; }

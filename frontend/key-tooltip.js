@@ -250,13 +250,18 @@
   }
 
   function renderTapDance(r, raw) {
-    const dash = "—";
-    return `
-      <div class="kt-row"><span class="kt-label">Tap</span><span>${escape(r.tap ?? dash)}</span></div>
-      <div class="kt-row"><span class="kt-label">Hold</span><span>${escape(r.hold ?? dash)}</span></div>
-      <div class="kt-row"><span class="kt-label">Double-tap</span><span>${escape(r.double_tap ?? dash)}</span></div>
-      <div class="kt-row"><span class="kt-label">Tap+Hold</span><span>${escape(r.tap_hold ?? dash)}</span></div>
-      <div class="kt-row"><span class="kt-label">Term</span><span>${r.tap_term_ms != null ? r.tap_term_ms + " ms" : dash}</span></div>`;
+    // Vial always serializes 4 branches per TD; the unused ones come back as
+    // KC_NO → resolved label = null. Skip those rows entirely so the user
+    // only sees branches they actually configured.
+    const rows = [];
+    if (r.tap)        rows.push(`<div class="kt-row"><span class="kt-label">Tap</span><span>${escape(r.tap)}</span></div>`);
+    if (r.hold)       rows.push(`<div class="kt-row"><span class="kt-label">Hold</span><span>${escape(r.hold)}</span></div>`);
+    if (r.double_tap) rows.push(`<div class="kt-row"><span class="kt-label">Double-tap</span><span>${escape(r.double_tap)}</span></div>`);
+    if (r.tap_hold)   rows.push(`<div class="kt-row"><span class="kt-label">Tap+Hold</span><span>${escape(r.tap_hold)}</span></div>`);
+    if (r.tap_term_ms != null) {
+      rows.push(`<div class="kt-row"><span class="kt-label">Term</span><span>${r.tap_term_ms} ms</span></div>`);
+    }
+    return rows.join("");
   }
 
   function renderTransparent(loc, layout) {
