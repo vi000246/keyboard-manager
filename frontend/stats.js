@@ -1,16 +1,26 @@
-// stats.js — Stats dashboard: per-app and global top-N tables.
-// Heatmap overlay (M3) extends this with a grid view in heatmap.js.
+// stats.js — Stats dashboard: heatmap on layout + per-app/kind Top-N table.
 (function () {
   "use strict";
 
   const root = document.getElementById("view-stats");
+  const layerSelect = document.getElementById("layer-select");
   let apps = [];
+  let layout = null;
   let loaded = false;
+  let lastHeatmap = null;
+  let lastStats = null;
 
   async function loadApps() {
     const r = await fetch("/api/apps");
     apps = r.ok ? await r.json() : [];
     apps.sort((a, b) => (a.bundle_id < b.bundle_id ? -1 : 1));
+  }
+
+  async function loadLayout() {
+    if (layout) return layout;
+    const r = await fetch("/api/layout");
+    layout = r.ok ? await r.json() : null;
+    return layout;
   }
 
   async function loadStats(app, kind) {
@@ -21,6 +31,8 @@
     const r = await fetch(u);
     return r.ok ? await r.json() : null;
   }
+
+  // ── Render fragments ────────────────────────────────────────────────
 
   function renderToolbar(currentApp, currentKind) {
     const opts = ['<option value="">All apps</option>']
@@ -46,6 +58,20 @@
       </div>`;
   }
 
+  function renderHeatmapSection(heatmap) {
+    if (!heatmap) return `<p class="placeholder">heatmap unavailable</p>`;
+    return `
+      <div class="heatmap-section">
+        <p class="meta">
+          Coverage:
+          <strong>${heatmap.coverage_pct.toFixed(2)}%</strong>
+          (cells: ${heatmap.cells.length}, unmapped: ${heatmap.unmapped.length},
+           max: ${heatmap.max_count.toLocaleString()})
+        </p>
+        <div id="stats-grid"></div>
+      </div>`;
+  }
+
   function renderTable(stats) {
     if (!stats) return `<p class="error">stats unavailable</p>`;
     if (!stats.rows.length) {
@@ -55,7 +81,7 @@
       .map((r, i) => {
         const mods = r.modifiers ? `${r.modifiers}+` : "";
         return `
-          <tr>
+          <tr data-key="${escapeAttr(r.key)}" data-mods="${escapeAttr(r.modifiers)}">
             <td class="rank">${i + 1}</td>
             <td class="count">${r.count.toLocaleString()}</td>
             <td class="pct">${r.pct.toFixed(2)}%</td>
@@ -71,14 +97,48 @@
       </table>`;
   }
 
+  // ── Wiring ─────────────────────────────────────────────────────────
+
   async function refresh() {
     const sel = root.querySelector("#stats-app");
     const kindSel = root.querySelector("#stats-kind");
     const app = sel ? sel.value || null : null;
     const kind = kindSel ? kindSel.value : "single";
-    const stats = await loadStats(app, kind);
-    root.innerHTML = renderToolbar(app, kind) + renderTable(stats);
+
+    const [stats, heatmap, lay] = await Promise.all([
+      loadStats(app, kind),
+      window.heatmap ? window.heatmap.loadHeatmap(app) : Promise.resolve(null),
+      loadLayout(),
+    ]);
+    lastStats = stats;
+    lastHeatmap = heatmap;
+
+    root.innerHTML =
+      renderToolbar(app, kind) +
+      renderHeatmapSection(heatmap) +
+      renderTable(stats);
+
+    // Render the keyboard grid for the currently-selected layer, then overlay
+    const gridSlot = root.querySelector("#stats-grid");
+    const layerIdx = parseInt(layerSelect.value, 10) || 0;
+    if (gridSlot && lay) {
+      gridSlot.innerHTML = window.gridRender.renderLayer(lay.layers[layerIdx]);
+      if (window.heatmap && heatmap) {
+        window.heatmap.applyOverlay(gridSlot, heatmap, layerIdx);
+      }
+    }
     wire();
+  }
+
+  function reapplyOverlayForLayer() {
+    const gridSlot = root.querySelector("#stats-grid");
+    const layerIdx = parseInt(layerSelect.value, 10) || 0;
+    if (gridSlot && layout) {
+      gridSlot.innerHTML = window.gridRender.renderLayer(layout.layers[layerIdx]);
+      if (window.heatmap && lastHeatmap) {
+        window.heatmap.applyOverlay(gridSlot, lastHeatmap, layerIdx);
+      }
+    }
   }
 
   function wire() {
@@ -86,13 +146,77 @@
     const kindSel = root.querySelector("#stats-kind");
     if (sel) sel.addEventListener("change", refresh);
     if (kindSel) kindSel.addEventListener("change", refresh);
+
+    // Bidirectional highlight (task 3.4)
+    const table = root.querySelector(".stats-table");
+    const grid = root.querySelector("#stats-grid");
+    if (grid && table) wireBidirectional(grid, table);
+  }
+
+  function wireBidirectional(gridEl, tableEl) {
+    gridEl.addEventListener("click", (e) => {
+      const k = e.target.closest(".key");
+      if (!k) return;
+      const top = k.querySelector(".label-top")?.textContent?.trim();
+      if (!top) return;
+      tableEl.querySelectorAll("tr.highlighted").forEach((r) => r.classList.remove("highlighted"));
+      const match = [...tableEl.querySelectorAll("tbody tr")].find(
+        (r) => r.dataset.key && normalizeForCompare(r.dataset.key) === normalizeForCompare(top),
+      );
+      if (match) {
+        match.classList.add("highlighted");
+        match.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+    });
+
+    tableEl.addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-key]");
+      if (!tr) return;
+      const key = tr.dataset.key;
+      gridEl.querySelectorAll(".key.flash").forEach((k) => k.classList.remove("flash"));
+      const target = [...gridEl.querySelectorAll(".key")].find(
+        (k) =>
+          normalizeForCompare(k.querySelector(".label-top")?.textContent?.trim() ?? "") ===
+          normalizeForCompare(key),
+      );
+      if (target) {
+        target.classList.add("flash");
+        setTimeout(() => target.classList.remove("flash"), 1200);
+      }
+    });
+  }
+
+  // macOS event keys are lowercase / abbreviated; keyboard grid labels use
+  // uppercase + symbols. Normalize both to a comparable form.
+  const _CMP_ALIASES = {
+    space: "space",
+    return: "enter",
+    enter: "enter",
+    delete: "bksp",
+    bksp: "bksp",
+    forwarddelete: "del",
+    del: "del",
+    escape: "esc",
+    esc: "esc",
+    tab: "tab",
+    left: "←",
+    right: "→",
+    up: "↑",
+    down: "↓",
+    pageup: "pgup",
+    pgup: "pgup",
+    pagedown: "pgdn",
+    pgdn: "pgdn",
+  };
+
+  function normalizeForCompare(s) {
+    const v = String(s).toLowerCase();
+    return _CMP_ALIASES[v] ?? v;
   }
 
   async function init() {
-    await loadApps();
-    const stats = await loadStats(null, "single");
-    root.innerHTML = renderToolbar(null, "single") + renderTable(stats);
-    wire();
+    await Promise.all([loadApps(), loadLayout()]);
+    refresh();
   }
 
   function escapeHtml(s) {
@@ -102,7 +226,7 @@
     return escapeHtml(s).replace(/"/g, "&quot;");
   }
 
-  // Lazy-load: only fetch when Stats tab first activates.
+  // Lazy load
   document.querySelector('nav button[data-view="stats"]').addEventListener("click", () => {
     if (!loaded) {
       loaded = true;
@@ -110,16 +234,8 @@
     }
   });
 
-  // Expose for heatmap.js (M3.3 will read current scope).
-  window.statsDashboard = {
-    getScope: () => {
-      const sel = root.querySelector("#stats-app");
-      const kindSel = root.querySelector("#stats-kind");
-      return {
-        app: sel ? sel.value || null : null,
-        kind: kindSel ? kindSel.value : "single",
-      };
-    },
-    refresh,
-  };
+  // React to layer dropdown changes while Stats tab is active.
+  layerSelect.addEventListener("change", () => {
+    if (loaded) reapplyOverlayForLayer();
+  });
 })();

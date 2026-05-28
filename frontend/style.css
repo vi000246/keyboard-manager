@@ -203,3 +203,18 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .stats-table .rank  { color: #666; width: 3rem; }
 .stats-table .count { font-variant-numeric: tabular-nums; width: 6rem; }
 .stats-table .pct   { color: #9ab; font-variant-numeric: tabular-nums; width: 5rem; }
+.stats-table tbody tr { cursor: pointer; }
+
+.heatmap-section {
+  margin-bottom: 1.5rem;
+}
+
+/* Bidirectional highlight flash on grid click from table */
+.key.flash {
+  animation: flash-pulse 1.2s ease;
+}
+
+@keyframes flash-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 125, 186, 0); }
+  30%      { box-shadow: 0 0 0 6px rgba(74, 125, 186, 0.7); }
+}
