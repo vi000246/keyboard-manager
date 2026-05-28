@@ -132,3 +132,89 @@ def test_import_full_baseline_count(db):
     # 8 days of data should always have thousands of (app, key) pairs
     assert result["events"] > 100
     assert result["apps"] > 5
+
+
+def test_reimport_replaces_existing_source_by_default(db, tmp_path):
+    """Re-importing same source must replace, not duplicate."""
+    sample = tmp_path / "k.json"
+    sample.write_text(json.dumps({"com.foo": {"j": 100, "k": 50}}))
+    import_file(sample, db)
+
+    # Simulate HS keystat counts having grown since last import.
+    sample.write_text(json.dumps({"com.foo": {"j": 200, "k": 75, "l": 10}}))
+    import_file(sample, db)
+
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Total events should reflect the LATER import only, not sum of both.
+        j = conn.execute(
+            "SELECT count FROM events WHERE app_bundle='com.foo' AND key='j'"
+        ).fetchall()
+        assert len(j) == 1, f"j duplicated: {[dict(r) for r in j]}"
+        assert j[0]["count"] == 200
+
+        all_keys = {
+            r["key"] for r in conn.execute("SELECT key FROM events").fetchall()
+        }
+        assert all_keys == {"j", "k", "l"}
+
+        # Only one snapshot of hs_keystat_json should remain.
+        snaps = conn.execute(
+            "SELECT * FROM snapshots WHERE source='hs_keystat_json'"
+        ).fetchall()
+        assert len(snaps) == 1
+    finally:
+        conn.close()
+
+
+def test_reimport_append_mode_preserves_history(db, tmp_path):
+    """Explicit append mode keeps both snapshots (advanced use)."""
+    sample = tmp_path / "k.json"
+    sample.write_text(json.dumps({"com.foo": {"j": 5}}))
+    import_file(sample, db)
+    import_file(sample, db, replace_existing_source=False)
+
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT count FROM events WHERE key='j' ORDER BY count"
+        ).fetchall()
+        assert len(rows) == 2  # two events, would sum to 10 via top_n
+        snaps = conn.execute(
+            "SELECT COUNT(*) AS n FROM snapshots WHERE source='hs_keystat_json'"
+        ).fetchone()
+        assert snaps["n"] == 2
+    finally:
+        conn.close()
+
+
+def test_reimport_does_not_touch_other_sources(db, tmp_path):
+    """Replacing 'hs_keystat_json' must not delete native_helper events."""
+    sample = tmp_path / "k.json"
+    sample.write_text(json.dumps({"com.foo": {"j": 5}}))
+    import_file(sample, db)
+
+    # Simulate a helper-written row using a different source label.
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "INSERT INTO events(ts, app_bundle, key, modifiers, count, snapshot_id, source) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            (100, "com.foo", "j", "", 1, 999, "native_helper"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    import_file(sample, db)  # re-import; should NOT touch native_helper rows
+
+    conn = sqlite3.connect(db)
+    try:
+        n = conn.execute(
+            "SELECT COUNT(*) FROM events WHERE source='native_helper'"
+        ).fetchone()[0]
+        assert n == 1
+    finally:
+        conn.close()

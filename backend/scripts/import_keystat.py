@@ -42,8 +42,21 @@ def import_file(
     json_path: Path,
     db_path: Path,
     source: str = "hs_keystat_json",
+    *,
+    replace_existing_source: bool = True,
 ) -> dict:
-    """Import a keystat JSON file into SQLite. Returns counts dict."""
+    """Import a keystat JSON file into SQLite. Returns counts dict.
+
+    Hammerspoon's keystat.lua writes cumulative counts since `startedAt`, so
+    re-importing the same JSON after the file grew would double-count every
+    (app, key) pair already on disk. To prevent that, by default we treat each
+    JSON re-import as a snapshot REPLACEMENT for the given `source`: delete
+    all existing events (and snapshots) with that source label, then insert
+    fresh.
+
+    Pass ``replace_existing_source=False`` to append additively — only useful
+    when the JSON is known to be disjoint from prior imports.
+    """
     json_path = Path(json_path)
     db_path = Path(db_path)
     ensure_schema(db_path)
@@ -55,6 +68,13 @@ def import_file(
     now = int(time.time())
     conn = sqlite3.connect(db_path)
     try:
+        if replace_existing_source:
+            # Wipe prior rows + snapshots so the new import isn't summed on
+            # top of the previous one. apps rows survive (their first_seen_ts
+            # is meaningful).
+            conn.execute("DELETE FROM events WHERE source = ?", (source,))
+            conn.execute("DELETE FROM snapshots WHERE source = ?", (source,))
+
         cur = conn.execute(
             "INSERT INTO snapshots(ts, source, notes) VALUES(?, ?, ?)",
             (now, source, f"imported from {json_path.name}"),
@@ -124,10 +144,21 @@ def _cli() -> int:
         default="hs_keystat_json",
         help="snapshot source label",
     )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="append instead of replacing existing rows for this source",
+    )
     args = parser.parse_args()
-    r = import_file(args.json_path, args.db, source=args.source)
+    r = import_file(
+        args.json_path,
+        args.db,
+        source=args.source,
+        replace_existing_source=not args.append,
+    )
+    mode = "appended" if args.append else "replaced"
     print(
-        f"imported {r['events']} events from {r['apps']} apps; "
+        f"{mode} {r['events']} events from {r['apps']} apps; "
         f"snapshot_id={r['snapshot_id']}"
     )
     return 0
