@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: km-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Vial config — read-only mount
+      - ${VIAL_CONFIG:-${HOME}/Projects/keyboard-map/mylayout.vil}:/data/mylayout.vil:ro
+      # SQLite stats database — read-write, persisted on host
+      - ${KEYSTAT_DB:-${HOME}/Library/Application Support/keyboard-manager}:/data/db
+    environment:
+      - VIAL_PATH=/data/mylayout.vil
+      - DB_PATH=/data/db/keystat.db
+      # native-helper runs on the macOS host; backend reaches it via host.docker.internal
+      - HELPER_WS_URL=ws://host.docker.internal:8765
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: km-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_URL=http://backend:8000
+    restart: unless-stopped

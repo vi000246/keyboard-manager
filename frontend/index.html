@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>keyboard-manager</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>keyboard-manager</h1>
+    <nav>
+      <button data-view="static" class="active">Static Viewer</button>
+      <button data-view="interactive">Interactive</button>
+      <button data-view="stats">Stats</button>
+    </nav>
+    <label>
+      Layer:
+      <select id="layer-select">
+        <option value="0">0 — BASE</option>
+        <option value="1">1 — NAV</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4 — MEDIA</option>
+        <option value="5">5</option>
+      </select>
+    </label>
+  </header>
+
+  <main>
+    <section id="view-static" class="view">
+      <p class="placeholder">M1 — Static Viewer renders here. Backend: <code>GET /api/layout</code>.</p>
+    </section>
+    <section id="view-interactive" class="view hidden">
+      <p class="placeholder">M4 — Interactive simulator. WebSocket subscribes to native-helper events.</p>
+    </section>
+    <section id="view-stats" class="view hidden">
+      <p class="placeholder">M2 + M3 — Stats dashboard. Heatmap overlay + per-app tables.</p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
