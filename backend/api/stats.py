@@ -1,0 +1,80 @@
+"""Stats API — top-N rankings and app metadata.
+
+GET /api/stats        — top-N keys aggregated from events table
+GET /api/apps         — known app bundle IDs and their bucket
+"""
+from __future__ import annotations
+
+import logging
+from typing import Literal
+
+from fastapi import APIRouter, Query
+
+from ..db.repository import AppsRepo, StatsRepo
+
+logger = logging.getLogger("keyboard_manager.api.stats")
+
+router = APIRouter()
+
+
+@router.get("/api/apps")
+def get_apps():
+    from ..main import DB_PATH
+
+    return AppsRepo(DB_PATH).all()
+
+
+@router.get("/api/stats")
+def get_stats(
+    app: str | None = None,
+    top: int = Query(50, ge=1, le=500),
+    kind: Literal["single", "mod", "all"] = "single",
+):
+    from ..main import DB_PATH
+
+    repo = StatsRepo(DB_PATH)
+    rows = repo.top_n(app=app, kind=kind, n=top)
+
+    # Total within the same scope (kind+app filter) drives the % column.
+    # Use raw events filtered by the same predicate so percentages add up to ~100.
+    if kind == "single":
+        # Only count rows where modifiers='' for the denominator
+        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers = ''")
+    elif kind == "mod":
+        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers != ''")
+    else:
+        scope_total = _scoped_total(DB_PATH, app=app, where="1=1")
+
+    return {
+        "scope": {"app": app, "kind": kind, "top": top},
+        "total_events": scope_total,
+        "rows": [
+            {
+                "key": r["key"],
+                "modifiers": r["modifiers"],
+                "count": r["total"],
+                "pct": (r["total"] / scope_total * 100) if scope_total else 0.0,
+            }
+            for r in rows
+        ],
+    }
+
+
+def _scoped_total(db_path, app: str | None, where: str) -> int:
+    """Sum of count over events matching {where} (+ optional app filter)."""
+    import sqlite3
+
+    params: list = []
+    app_clause = ""
+    if app:
+        app_clause = "AND app_bundle = ?"
+        params.append(app)
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            f"SELECT COALESCE(SUM(count), 0) FROM events WHERE {where} {app_clause}",
+            params,
+        ).fetchone()
+        return row[0] or 0
+    finally:
+        conn.close()
