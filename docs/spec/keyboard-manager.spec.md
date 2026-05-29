@@ -18,6 +18,8 @@
 |------|------------|-------------|------|---------|
 | 2026-05-28 | `docs/PRD.md` | `docs/srs/keyboard-manager-mvp.srs.md` | `docs/plans/keyboard-manager-mvp.plan.md` | Created — local Docker tool that parses Vial `.vil` for layout viz + ingests keystrokes from a macOS native helper for heatmap & live simulator |
 | 2026-05-28 | — | — | — | JSON importer removed (`backend/scripts/import_keystat.py`). Hammerspoon → native_helper cutover complete; helper writes directly to SQLite. Imported baseline rows (`source='hs_keystat_json'`) remain as historical data. |
+| 2026-05-28 | — | — | — | Stats heatmap refined — typing-key filter + modifier derivation + combo position index so firmware-level shortcuts (TD branches with `LGUI(KC_1)` etc.) attribute to their physical thumb position instead of the bare digit row. |
+| 2026-05-28 | — | — | — | Layout viz gains **combo trigger badges** (cyan corner dots), **macro slot labels** (`MACRO{N}` keycode → "macro N" + dedicated tooltip kind), and an **Interactive combo legend** that highlights triggers + output together when any participant is held. Helper pairs press/release by pynput `.vk` to avoid chip residue when modifier state shifts mid-stroke (e.g. `Shift+9 → (` released after Shift). Old-style QMK aliases (`KC_LBRACKET`, `KC_RBRACKET`, `KC_BSLASH`) added to the label table so `LSFT(...)` combos resolve to `{`, `}`, `\|` instead of falling through to `⇧KC_*`. |
 
 ## Summary
 
@@ -44,6 +46,12 @@
 | **Mod-tap（MT）** | tap 送字母、hold 當作 modifier；`ALL_T(...)` = hold 送 Hyper |
 | **Resolved key** | Keycode 經 resolver 翻譯後的人類可讀結構：`{tap, hold, branches, label_top, label_bottom, expanded_kind}` |
 | **Smart mode (rendering)** | 純字母鍵單行顯示、MT/LT/TD 鍵雙行堆疊顯示的 frontend 渲染策略 |
+| **Combo** | 一組 trigger 鍵碼（1–4 鍵）同時按下時 firmware 改送 `output` keycode。layout API 同時送 `triggers`、`trigger_labels`、`output`、`output_label`。 |
+| **Combo trigger badge** | Cell 右上角的青色小圓點，表示該物理位置是某個 combo 的 trigger 之一。靜態 viewer 與 Interactive 共用。 |
+| **Combo legend** | Interactive 頁面下方固定列表，一行對應一條 combo (`C{N}: triggers → output`)；當任一 trigger 或 output 出現在當前 `heldKeys` 時整行高亮並在 grid 上連動 outline 所有參與位置。 |
+| **Macro slot** | Vial `.vil` 的 `macro[N]` 條目；存在時 layout API 回 `{index, raw: "MACRO{N}", actions: [...]}`。Cell 上的 `MACRO{N}` keycode 由 resolver 翻成 `expanded_kind="macro"`、`label_top="macro N"`。 |
+| **Macro action** | Vial macro 內的單一動作，標準形式 `["tap", "KC_X"]` / `["down", ...]` / `["up", ...]` / `["text", "..."]` / `["delay", ms]`。前端 tooltip 逐行渲染。 |
+| **VK pairing (helper)** | Helper 用 pynput `KeyCode.vk`（物理鍵唯一 id）把 press 時的 `name_for(key)` 記在 `_pressed_names[vk]`，release 時優先用該 name 而非重新解析，避開 `KeyCode.char` 隨 modifier 變化造成的 chip 殘留。 |
 | **Keystat event** | 一次擊鍵紀錄，含 `(ts, app_bundle, key, modifiers, count)` |
 | **App bundle ID** | macOS 應用唯一識別字串，例如 `com.googlecode.iterm2` |
 | **Bucket** | App 分類（terminal/browser/editor/chat/launcher），用於 per-app stats 報表分組 |
@@ -154,20 +162,22 @@
 
 | Component | Responsibility | Interface |
 |---|---|---|
-| **VialParser** | 讀 `.vil` JSON、把 layout/tap_dance/combo/key_override 解析成記憶體模型 | Python function `parse(path) → Layout` |
-| **KeycodeResolver** | 把 raw keycode（`LT1(KC_TAB)`、`KC_LSFT` 等）翻成 `{tap, hold, branches, label_top, label_bottom, expanded_kind}` | `resolve(raw: str, ctx: LayoutContext) → ResolvedKey` |
+| **VialParser** | 讀 `.vil` JSON、把 layout/tap_dance/combo/key_override/macro 解析成記憶體模型 | Python function `parse(path) → Layout`（`Layout.macros: list[Macro]` 為 fixed-size 列表，空 slot 也保留索引） |
+| **KeycodeResolver** | 把 raw keycode（`LT1(KC_TAB)`、`KC_LSFT`、`MACRO0` 等）翻成 `{tap, hold, branches, label_top, label_bottom, expanded_kind}` | `resolve(raw: str, ctx: LayoutContext) → ResolvedKey`。`expanded_kind` 已擴充 `"macro"`；`KC_LBRACKET`/`KC_RBRACKET`/`KC_BSLASH` 等舊式長別名與 `KC_LBRC` 等等價。 |
 | **LayoutAPI** | HTTP endpoint，回 parsed layout 給 frontend；快取 + mtime watch | FastAPI router |
 | **StatsRepo** | SQLite CRUD 抽象（events / apps / snapshots）；提供 top-N、heatmap aggregation | Python class with methods `top_n()`, `heatmap()`, `import_json()` |
 | **StatsAPI** | HTTP endpoint，回 stats / heatmap | FastAPI router |
 | **JSONImporter** | 把 `~/keystat-counts.json` 讀進 SQLite，做一次 baseline aggregation | CLI script `backend/scripts/import_keystat.py` |
 | **LiveBridge** | Backend WS endpoint，dial 進 helper :8765、把 events 轉發給瀏覽器 | FastAPI WS route + `websockets` client |
-| **NativeHelper.Listener** | pynput global key listener，產生 `KeyEvent(ts, key, modifiers, action)` | Python thread |
+| **NativeHelper.Listener** | pynput global key listener，產生 `KeyEvent(ts, key, modifiers, action)`；維護 `_pressed_names: dict[int, str]` 用 vk 配對 press/release，避免 `KeyCode.char` 在 release 期間因 modifier 變動而改變 | Python thread |
 | **NativeHelper.AppTracker** | 用 `NSWorkspace.frontmostApplication()` 取當前 bundle ID，cache 100ms | Python helper |
 | **NativeHelper.EventSink** | 把 KeyEvent 同時寫 SQLite（batch 5s）+ WebSocket broadcast | Python async coroutine |
 | **NativeHelper.WSServer** | WebSocket server on :8765，多 subscriber 容忍 | `websockets.serve` |
-| **Frontend.StaticViewer** | 渲染 6 layer keyboard grid SVG + 智慧模式 keycode 展開 | DOM module |
-| **Frontend.Interactive** | 訂閱 `/api/live`、依即時 keypress 切換 grid view | DOM module + WebSocket client |
-| **Frontend.StatsDashboard** | Heatmap overlay + top-N 表格 + per-app filter | DOM module + Canvas |
+| **Frontend.StaticViewer** | 渲染所有 used layer keyboard grid + 智慧模式 keycode 展開；layout-wide decorations (combo dots + macro labels) 一次性計算後傳給 `gridRender.renderLayer` | DOM module |
+| **Frontend.Interactive** | 訂閱 `/api/live`、依即時 keypress 切換 grid view；於 grid 下方 render `ComboLegend` 並在 trigger / output 被 hold 時連動 highlight | DOM module + WebSocket client |
+| **Frontend.gridRender** | 共用的 layer-to-HTML renderer，接 `(layer, decorations)` 兩參；`decorationsFor(layout)` 由 layout 一次性算出 `{comboTriggers: Set<raw>, macroByRaw: Map<raw, index>}` | DOM helper |
+| **Frontend.KeyTooltip** | Hover 顯示 keycode 詳情、combo 參與、macro action 序列 (`renderMacro` 從 `layout.macro[index].actions` 取) | DOM module |
+| **Frontend.StatsDashboard** | Heatmap overlay + top-N 表格 + per-app filter；熱區計算用 `combo_position_index` 將 firmware-level shortcut 對位到實際物理鍵 | DOM module + Canvas |
 
 ### Data Flow
 
@@ -374,9 +384,23 @@ CREATE TABLE snapshots (
     }
     // ... 16 entries
   ],
-  "combos": [
-    { "index": 0, "trigger": ["KC_J", "KC_K"], "output_label": "Esc" }
-    // ...
+  "combo": [
+    {
+      "index": 0,
+      "triggers": ["KC_J", "KC_K"],
+      "trigger_labels": ["J", "K"],
+      "output": "KC_ESCAPE",
+      "output_label": "Esc"
+    }
+    // ... 只列出 triggers 非空者；空 slot 不入 payload
+  ],
+  "macro": [
+    {
+      "index": 0,
+      "raw": "MACRO0",
+      "actions": [["tap", "KC_H"], ["tap", "KC_I"]]
+    }
+    // ... 只列出 actions 非空者；空 slot 不入 payload
   ],
   "key_overrides": [],
   "encoder_layout": [ /* ... */ ]
@@ -393,12 +417,19 @@ CREATE TABLE snapshots (
 }
 
 // GET /api/stats/heatmap?app=com.googlecode.iterm2
+// Scope: combos (modifiers != '') + non-typing single keys (arrows / F-keys /
+// nav / Esc / Tab). Letters / digits / Space / Enter / Bksp / 常見標點被
+// `filter_typing_singles` 過濾掉，避免一般打字量壓過 hotkey 訊號。
+// Modifier counts 派生到實體 modifier 位置（cmd → LGUI_T 位置等）；ALL_T
+// (Hyper) 因每個 modifier 都含、過於模糊故略過。
+// 當 `(modifiers, base)` 命中 firmware combo / TD branch 時（如 cmd+1 對應
+// TD0），整個 count 歸到該物理位置、不再走 base + modifier 派生。
 {
   "scope": { "app": "com.googlecode.iterm2" },
   "max_count": 5892,
   "cells": [
-    { "layer": 0, "row": 7, "col": 1, "key": "h", "count": 1946 },
-    { "layer": 0, "row": 7, "col": 2, "key": "j", "count": 5892 }
+    { "layer": 0, "row": 4, "col": 3, "key": "cmd+1", "count": 2804 },
+    { "layer": 0, "row": 7, "col": 1, "key": "→",     "count": 3024 }
     // ...
   ],
   "unmapped": [
@@ -535,6 +566,11 @@ CREATE TABLE snapshots (
 | Capture stats overlap | M4 ship 後手動 disable HS | 自動接管 HS | HS 是 user 自己的 dotfiles、避免動 |
 | JSON baseline 處理 | One-shot import | 持續 sync JSON ↔ SQLite | JSON 廢用後不會再變 |
 | Smart-mode rendering | 雙模（plain 單行 / MT-LT-TD 雙行） | 全雙行 / hover-only | 平衡視覺密度與快速辨識（PRD 決定） |
+| Combo 視覺提示 | 右上角青色小圓點 (trigger 才上) + 靜態 legend + 按鍵連動 highlight | Combo 編號文字、Hover-only | 不破壞 cell 標籤密度、Macro 可以共享色點規範 |
+| Macro label 來源 | 由 resolver 給 `expanded_kind="macro"` + `label_top="macro N"`；`MACROx` raw 與 `Mx` 簡寫並收 | 從 macro action 自動生成簡稱 | Action 序列開放可長，自動命名容易誤導；統一固定形式較穩定 |
+| Helper press/release pairing | 用 pynput `KeyCode.vk` 把 press 名稱記住、release 時取回 | 前端加 timeout 清除 stuck key | Timeout 易遮蓋其他 bug；vk 配對對應 pynput `.char` 隨 modifier 變化的根因 |
+| Combo highlight ambiguity | Output 在 `heldKeys` 時所有對應 combo 都點亮（容忍 over-highlight） | 嘗試只認被 combo fire 的事件 | Firmware 吞 trigger 不送 macOS、無法區分；over-highlight 比 silent drop 友善 |
+| Layout API combo / macro 篩選 | API 只回 triggers 非空 / actions 非空的條目 | 全部回包含空 slot | Frontend lookup 不需要面對 15 個無意義空 slot |
 
 ---
 

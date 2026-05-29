@@ -30,11 +30,14 @@
     return layout;
   }
 
-  async function loadStats(app, kind) {
+  async function loadStats(app, kind, keyQuery) {
     const u = new URL("/api/stats", location.origin);
     if (app) u.searchParams.set("app", app);
     u.searchParams.set("kind", kind);
     u.searchParams.set("top", "30");
+    // When the user enters a key filter, send it through — backend lifts
+    // the top cap so even rare matches (count=1) show up.
+    if (keyQuery) u.searchParams.set("key", keyQuery);
     const r = await fetch(u);
     return r.ok ? await r.json() : null;
   }
@@ -43,6 +46,13 @@
 
   // Last user-entered search query — preserved across re-renders.
   let appFilter = "";
+  // Free-text filter on key/modifiers — e.g. "cmd" surfaces every Cmd combo
+  // regardless of count rank (backend bypasses top-N cap when this is set).
+  let keyFilter = "";
+  // Debounce + focus-restore plumbing: typing fires a refresh that wipes
+  // the toolbar, so we set a flag to put focus + caret back on the input.
+  let _keyFilterTimer = null;
+  let _focusKeyFilter = false;
 
   function filteredApps() {
     if (!appFilter) return apps;
@@ -86,6 +96,11 @@
           <select id="stats-app">${opts}</select>
         </label>
         <label>Kind: <select id="stats-kind">${kinds}</select></label>
+        <label>Key:
+          <input id="stats-key-filter" type="search"
+                 placeholder="cmd / c / shift…"
+                 value="${escapeAttr(keyFilter)}" autocomplete="off">
+        </label>
         <label>Layer: <select id="stats-layer">${layerOpts}</select></label>
         <span id="helper-status-slot"></span>
       </div>`;
@@ -146,6 +161,11 @@
     return `
       <div class="heatmap-section">
         <p class="meta">
+          Shortcut heatmap — combos + functional keys (letters / digits /
+          punctuation excluded so typing volume doesn't drown out hotkeys).
+          Modifiers (Cmd/Shift/Ctrl/Alt) credit their physical key positions.
+        </p>
+        <p class="meta">
           Coverage:
           <strong>${heatmap.coverage_pct.toFixed(2)}%</strong>
           (cells: ${heatmap.cells.length}, unmapped: ${heatmap.unmapped.length},
@@ -189,7 +209,7 @@
     const kind = kindSel ? kindSel.value : "single";
 
     const [stats, heatmap, lay] = await Promise.all([
-      loadStats(app, kind),
+      loadStats(app, kind, keyFilter),
       window.heatmap ? window.heatmap.loadHeatmap(app) : Promise.resolve(null),
       loadLayout(),
     ]);
@@ -212,6 +232,18 @@
     wire();
     renderHelperBadge();
     startHelperPolling();
+    // Refresh wiped the toolbar; put focus + caret back on the key filter
+    // if it was the trigger, so the user's typing flow stays uninterrupted.
+    if (_focusKeyFilter) {
+      const inp = root.querySelector("#stats-key-filter");
+      if (inp) {
+        inp.focus();
+        const v = inp.value;
+        inp.value = "";
+        inp.value = v;
+      }
+      _focusKeyFilter = false;
+    }
   }
 
   function reapplyOverlayForLayer() {
@@ -231,6 +263,7 @@
     const kindSel = root.querySelector("#stats-kind");
     const layerSel = root.querySelector("#stats-layer");
     const searchInput = root.querySelector("#stats-app-search");
+    const keyFilterInput = root.querySelector("#stats-key-filter");
     if (sel) sel.addEventListener("change", refresh);
     if (kindSel) kindSel.addEventListener("change", refresh);
     if (layerSel) {
@@ -244,6 +277,17 @@
         appFilter = e.target.value;
         // Only re-render the dropdown — don't re-fetch stats while the user types.
         rerenderToolbarOnly(sel ? sel.value || null : null, kindSel ? kindSel.value : "single");
+      });
+    }
+    if (keyFilterInput) {
+      keyFilterInput.addEventListener("input", (e) => {
+        const v = e.target.value;
+        if (_keyFilterTimer) clearTimeout(_keyFilterTimer);
+        _keyFilterTimer = setTimeout(() => {
+          keyFilter = v;
+          _focusKeyFilter = true;
+          refresh();
+        }, 300);
       });
     }
 
@@ -271,6 +315,7 @@
     const kindSel = root.querySelector("#stats-kind");
     const layerSel = root.querySelector("#stats-layer");
     const searchInput = root.querySelector("#stats-app-search");
+    const keyFilterInput = root.querySelector("#stats-key-filter");
     if (sel) sel.addEventListener("change", refresh);
     if (kindSel) kindSel.addEventListener("change", refresh);
     if (layerSel) {
@@ -283,6 +328,17 @@
       searchInput.addEventListener("input", (e) => {
         appFilter = e.target.value;
         rerenderToolbarOnly(sel ? sel.value || null : null, kindSel ? kindSel.value : "single");
+      });
+    }
+    if (keyFilterInput) {
+      keyFilterInput.addEventListener("input", (e) => {
+        const v = e.target.value;
+        if (_keyFilterTimer) clearTimeout(_keyFilterTimer);
+        _keyFilterTimer = setTimeout(() => {
+          keyFilter = v;
+          _focusKeyFilter = true;
+          refresh();
+        }, 300);
       });
     }
     // The badge lives inside the toolbar — restore it after the re-render

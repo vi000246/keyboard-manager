@@ -124,6 +124,7 @@ class StatsRepo(_BaseRepo):
         app: str | None,
         kind: str,
         n: int = 50,
+        key_filter: str | None = None,
     ) -> list[dict]:
         kind_clause = _KIND_SQL.get(kind, "1=1")
         params: list = []
@@ -131,11 +132,21 @@ class StatsRepo(_BaseRepo):
         if app:
             app_clause = "AND app_bundle = ?"
             params.append(app)
+        # Free-text filter — matches as substring against either the key
+        # column or the modifiers column, so a user typing "cmd" gets every
+        # Cmd combo (matching modifiers) AND any literal key named "cmd"
+        # (rare but possible if helper emits it). LOWER on both sides keeps
+        # the match case-insensitive regardless of SQLite's default LIKE.
+        key_clause = ""
+        if key_filter:
+            key_clause = "AND (LOWER(key) LIKE ? OR LOWER(modifiers) LIKE ?)"
+            like = f"%{key_filter.lower()}%"
+            params.extend([like, like])
         params.append(n)
         with self._conn() as c:
             rows = c.execute(
                 f"SELECT key, modifiers, SUM(count) AS total "
-                f"FROM events WHERE {kind_clause} {app_clause} "
+                f"FROM events WHERE {kind_clause} {app_clause} {key_clause} "
                 f"GROUP BY key, modifiers ORDER BY total DESC LIMIT ?",
                 params,
             ).fetchall()

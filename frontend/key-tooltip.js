@@ -162,6 +162,7 @@
       "transparent":   "Transparent",
       "empty":         "Empty",
       "unknown":       "Unknown",
+      "macro":         "Macro",
     };
     return labels[kind] || kind || "Key";
   }
@@ -185,6 +186,7 @@
       case "transparent":    body = renderTransparent(loc, layout); break;
       case "empty":          body = `<div class="kt-row"><span>No mapping.</span></div>`; break;
       case "unknown":        body = renderUnknown(r); break;
+      case "macro":          body = renderMacro(r, raw, layout); break;
       default:               body = `<div class="kt-row"><span>Output:</span><span>${escape(r.label_top || raw)}</span></div>`;
     }
 
@@ -284,6 +286,52 @@
     return `
       <div class="kt-row"><span class="kt-label">Output</span><span>${escape(r.label_top || "")}</span></div>
       <div class="kt-note">Not in label table — add it to <code>backend/parsers/keycode_labels.py</code>.</div>`;
+  }
+
+  // Vial macro actions vary in shape; we render them generically:
+  //   ["tap", "KC_X"]    → tap KC_X
+  //   ["down", "KC_X"]   → down KC_X
+  //   ["up", "KC_X"]     → up KC_X
+  //   ["text", "hello"]  → text "hello"
+  //   ["delay", 200]     → delay 200ms
+  //   anything else      → raw JSON of the action
+  function _formatMacroAction(act) {
+    if (!Array.isArray(act) || act.length === 0) return JSON.stringify(act);
+    const verb = act[0];
+    const arg = act[1];
+    if (verb === "delay") return `delay ${arg}ms`;
+    if (verb === "text")  return `text ${JSON.stringify(arg)}`;
+    if (verb === "tap" || verb === "down" || verb === "up") {
+      return `${verb} ${arg}`;
+    }
+    return JSON.stringify(act);
+  }
+
+  function renderMacro(r, raw, layout) {
+    // Pull the action sequence for this macro index from the layout payload.
+    const idx = (() => {
+      const m = raw.match(/^MACRO?(\d+)$/);
+      return m ? parseInt(m[1], 10) : null;
+    })();
+    let actions = null;
+    if (idx != null && Array.isArray(layout.macro)) {
+      const entry = layout.macro.find((m) => m.index === idx);
+      if (entry) actions = entry.actions;
+    }
+    const header = `
+      <div class="kt-row"><span class="kt-label">Label</span><span>${escape(r.label_top || raw)}</span></div>`;
+    if (actions == null) {
+      return `${header}<div class="kt-note">Macro slot ${idx ?? "?"} is not defined in this .vil.</div>`;
+    }
+    if (actions.length === 0) {
+      return `${header}<div class="kt-note">Macro is empty (no actions configured).</div>`;
+    }
+    const rows = actions
+      .map((a) => `<div class="kt-sub">• ${escape(_formatMacroAction(a))}</div>`)
+      .join("");
+    return `${header}
+      <div class="kt-row"><span class="kt-label">Actions</span><span>${actions.length}</span></div>
+      ${rows}`;
   }
 
   // ── Combo participation ─────────────────────────────────────────────

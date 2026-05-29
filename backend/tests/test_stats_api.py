@@ -109,3 +109,61 @@ def test_stats_pct_field(client):
 def test_stats_invalid_kind_rejected(client):
     r = client.get("/api/stats?kind=bogus")
     assert r.status_code == 422  # FastAPI Query regex validation
+
+
+def test_stats_key_filter_modifiers_substring(client):
+    """key=cmd should return rows whose modifiers contain 'cmd' (case-insensitive)."""
+    r = client.get("/api/stats?kind=all&key=cmd")
+    body = r.json()
+    pairs = {(row["key"], row["modifiers"]) for row in body["rows"]}
+    # iTerm: cmd+v=3, Brave: cmd+1=1529 — both should appear
+    assert ("v", "cmd") in pairs
+    assert ("1", "cmd") in pairs
+    # Plain keys (no mods) must NOT match a "cmd" modifier filter
+    assert ("j", "") not in pairs
+    assert ("right", "") not in pairs
+
+
+def test_stats_key_filter_returns_long_tail(tmp_path, monkeypatch):
+    """key filter must surface rare combos even past the default top=50 cap."""
+    db = tmp_path / "t.db"
+    ensure_schema(db)
+    # Seed 60 distinct Cmd combos with counts 1..60 + a giant non-cmd row.
+    # Without key filter, only the top 50 would surface (and Cmd combos with
+    # count <= 10 would be excluded). With key=cmd, all 60 must appear.
+    cmd_events = {f"cmd+{c}": i for i, c in enumerate("abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-+={}[];'\",.<>?/`~|\\", start=1)}
+    cmd_events = dict(list(cmd_events.items())[:60])
+    seed_events(db, {"com.test.app": {**cmd_events, "j": 99999}})
+    monkeypatch.setenv("VIAL_PATH", str(FIXTURE))
+    monkeypatch.setenv("DB_PATH", str(db))
+    from backend.api import layout as layout_mod
+    layout_mod._cache.clear()
+    from backend import main as backend_main
+    importlib.reload(backend_main)
+    c = TestClient(backend_main.app)
+
+    body = c.get("/api/stats?kind=all&key=cmd").json()
+    cmd_rows = [r for r in body["rows"] if "cmd" in r["modifiers"]]
+    assert len(cmd_rows) == 60
+    # Rare ones (count=1, 2) must be in the result
+    counts = {r["count"] for r in cmd_rows}
+    assert 1 in counts and 2 in counts
+
+
+def test_stats_key_filter_pct_relative_to_filtered_scope(client):
+    """With key=cmd, pct must be share of cmd events, not of all events."""
+    body = client.get("/api/stats?kind=all&key=cmd").json()
+    # total_events should equal the sum of cmd-modifier events only
+    # (iTerm cmd+v=3 + Brave cmd+1=1529 = 1532)
+    assert body["total_events"] == 1532
+    # And the row pct should sum to ~100%
+    pct_sum = sum(r["pct"] for r in body["rows"])
+    assert abs(pct_sum - 100.0) < 0.01
+
+
+def test_stats_key_filter_echoed_in_scope(client):
+    """scope.key should echo the filter so the frontend can verify."""
+    body = client.get("/api/stats?key=cmd").json()
+    assert body["scope"]["key"] == "cmd"
+    no_key = client.get("/api/stats").json()
+    assert no_key["scope"]["key"] is None

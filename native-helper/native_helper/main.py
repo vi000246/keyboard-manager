@@ -65,20 +65,42 @@ class Helper:
         self.dispatcher = EventDispatcher()
         # Tracks currently-held modifier names so we can attach them to event payloads.
         self._held_mods: set[str] = set()
+        # vk → name mapping for currently-pressed keys. Needed because pynput's
+        # KeyCode.char shifts with the active modifier set: pressing Shift+9
+        # reports char='('; if Shift releases first the same physical key's
+        # release reports char='9'. Without this mapping, the WS "up" event
+        # name wouldn't match the earlier "down" name and the frontend's
+        # heldKeys set would leak '(' forever.
+        self._pressed_names: dict[int, str] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
         self._listener: keyboard.Listener | None = None
         self._shutdown_event: asyncio.Event | None = None
 
     # ── pynput callbacks (run on listener thread) ─────────────────────
 
+    @staticmethod
+    def _vk_of(key) -> int | None:
+        """pynput's stable per-physical-key id. Both Key enum and KeyCode
+        expose .vk on macOS; return None only for the rare case where it
+        isn't present so callers can fall back to the resolved name."""
+        return getattr(key, "vk", None)
+
     def _on_press(self, key) -> None:
         name = name_for(key)
+        vk = self._vk_of(key)
+        if vk is not None:
+            self._pressed_names[vk] = name
         if name in MODIFIER_NAMES:
             self._held_mods.add(name)
         self._dispatch("down", name)
 
     def _on_release(self, key) -> None:
-        name = name_for(key)
+        vk = self._vk_of(key)
+        # Prefer the name we used at press time so the release event always
+        # matches its prior down (see _pressed_names docstring).
+        name = self._pressed_names.pop(vk, None) if vk is not None else None
+        if name is None:
+            name = name_for(key)
         if name in MODIFIER_NAMES:
             self._held_mods.discard(name)
         self._dispatch("up", name)

@@ -64,6 +64,27 @@ _MOD_WRAP_MAP: dict[str, str] = {
     # LSFT handled separately because of shift-pair labels (KC_1 → "!" etc.)
 }
 
+# Multi-modifier wrappers — QMK letter abbreviations: S=Shift, C=Ctrl,
+# A=Alt, G=GUI/Cmd. We resolve to a "+"-joined human label. Order in the
+# value matches the QMK alphabetical letter order in the prefix so the
+# label and the keycode read the same way.
+_MULTI_MOD_WRAP_MAP: dict[str, str] = {
+    # 2-mod
+    "SGUI": "Shift+Cmd",      # KC_SGUI = LSFT + LGUI (macOS screenshot 等)
+    "LCG":  "Ctrl+Cmd",       # LCTL + LGUI
+    "LCA":  "Ctrl+Alt",       # LCTL + LALT
+    "LSA":  "Shift+Alt",      # LSFT + LALT
+    "LAG":  "Alt+Cmd",        # LALT + LGUI
+    "RCS":  "RCtrl+RShift",
+    # 3-mod
+    "SCG":  "Shift+Ctrl+Cmd",
+    "LCAG": "Ctrl+Alt+Cmd",
+    "MEH":  "Meh",            # LCTL + LSFT + LALT — same as Meh mod-tap hold
+    # 4-mod
+    "HYPR": "Hyper",          # LCTL + LSFT + LALT + LGUI
+    "ALL":  "Hyper",          # alias used by some firmwares
+}
+
 # Shifted variants of common keys — produced when wrapped in LSFT(...)
 _SHIFT_PAIRS: dict[str, str] = {
     "KC_1": "!", "KC_2": "@", "KC_3": "#", "KC_4": "$", "KC_5": "%",
@@ -72,6 +93,8 @@ _SHIFT_PAIRS: dict[str, str] = {
     "KC_COMMA": "<", "KC_DOT": ">", "KC_SLASH": "?",
     "KC_MINUS": "_", "KC_EQUAL": "+",
     "KC_LBRC": "{", "KC_RBRC": "}", "KC_BSLS": "|", "KC_GRAVE": "~",
+    # Long-form aliases — see note in keycode_labels.py.
+    "KC_LBRACKET": "{", "KC_RBRACKET": "}", "KC_BSLASH": "|",
 }
 
 
@@ -117,6 +140,32 @@ def resolve(raw: str, ctx: LayoutContext) -> ResolvedKey:
             return ResolvedKey(
                 raw=raw, expanded_kind="mod-wrapped",
                 label_top=f"{mod_label}+{inner_lbl}",
+            )
+
+    # ── Multi-mod wrappers: SGUI(...), LCG(...), HYPR(...), etc.
+    for prefix, mod_label in _MULTI_MOD_WRAP_MAP.items():
+        inner = _strip_wrapper(raw, prefix)
+        if inner is not None:
+            inner_lbl = resolve(inner, ctx).label_top or inner
+            return ResolvedKey(
+                raw=raw, expanded_kind="mod-wrapped",
+                label_top=f"{mod_label}+{inner_lbl}",
+            )
+
+    # ── MO(N) momentary layer — hold to activate layer N. Unlike LT it
+    # has no tap action; we model it as layer-tap with label_top set to
+    # the layer arrow so the cell still reads as "goes to L{N}". This
+    # keeps the layer-activation logic in interactive.js (which looks
+    # for expanded_kind="layer-tap" and label_bottom matching "L{N}")
+    # working without a separate "layer-mo" kind.
+    if raw.startswith("MO(") and raw.endswith(")"):
+        n = raw[3:-1]
+        if n.isdigit():
+            layer = int(n)
+            return ResolvedKey(
+                raw=raw, expanded_kind="layer-tap",
+                label_top=f"→L{layer}", label_bottom=f"L{layer}",
+                tap=None, hold=f"→L{layer}",
             )
 
     # ── LT{N}(KC_X) layer-tap
@@ -173,6 +222,23 @@ def resolve(raw: str, ctx: LayoutContext) -> ResolvedKey:
                     {"action": "tap_hold", "label": th_r.label_top},
                 ],
             )
+
+    # ── MACRO{N} / M{N} — macro reference. The actions live separately on
+    # the Layout (Layout.macros), keyed by index; the cell-level resolved
+    # entry just carries a friendly label and the index so the frontend can
+    # cross-reference. We DON'T inline the action list here — the resolved
+    # struct is per-cell and the same macro can appear on many cells.
+    if raw.startswith("MACRO") and raw[5:].isdigit():
+        return ResolvedKey(
+            raw=raw, expanded_kind="macro",
+            label_top=f"macro {int(raw[5:])}", label_bottom=None,
+        )
+    if raw.startswith("M") and raw[1:].isdigit():
+        # Older Vial uses bare "M0", "M1", ...
+        return ResolvedKey(
+            raw=raw, expanded_kind="macro",
+            label_top=f"macro {int(raw[1:])}", label_bottom=None,
+        )
 
     # ── Fallback: surface raw so the M1 coverage gate flags missing labels
     return ResolvedKey(raw=raw, expanded_kind="unknown", label_top=raw)

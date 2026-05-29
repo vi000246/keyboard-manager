@@ -89,12 +89,27 @@ def _load(path: Path) -> dict:
         d["output_label"] = _label_of(c.output)
         combo_json.append(d)
 
+    # Only surface macros that actually have at least one action — empty
+    # slots clutter the frontend's lookup table without adding information.
+    # `raw` is the keycode that, when placed in a layer cell, fires this
+    # macro (the frontend uses it to attach a "macro N" badge).
+    macro_json: list[dict] = []
+    for m in layout.macros:
+        if not m.actions:
+            continue
+        macro_json.append({
+            "index": m.index,
+            "raw": f"MACRO{m.index}",
+            "actions": m.actions,
+        })
+
     result = {
         "vial_protocol": layout.vial_protocol,
         "uid": layout.uid,
         "layers": layers_json,
         "tap_dance": [asdict(td) for td in layout.tap_dance],
         "combo": combo_json,
+        "macro": macro_json,
     }
 
     _cache["key"] = cache_key

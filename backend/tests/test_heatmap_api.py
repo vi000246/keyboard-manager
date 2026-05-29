@@ -14,9 +14,19 @@ FIXTURE = Path(__file__).parent / "fixtures" / "mylayout.vil"
 def client(tmp_path, monkeypatch):
     db = tmp_path / "t.db"
     ensure_schema(db)
+    # Mix of typing singles (filtered), functional singles (kept), combos (kept).
     seed_events(db, {
-        "com.googlecode.iterm2": {"j": 5892, "k": 2314, "f19": 1201},
-        "com.brave.Browser": {"right": 2497},
+        "com.googlecode.iterm2": {
+            "j": 5892,            # letter — filtered
+            "k": 2314,            # letter — filtered
+            "f19": 1201,          # unmapped functional single — kept, ends up in unmapped
+            "cmd+s": 50,          # combo — kept, S + cmd both lit
+            "cmd+shift+t": 20,    # combo — T + cmd + shift all lit
+        },
+        "com.brave.Browser": {
+            "right": 2497,        # arrow — kept (functional single)
+            "cmd+t": 30,          # combo — kept
+        },
     })
     monkeypatch.setenv("VIAL_PATH", str(FIXTURE))
     monkeypatch.setenv("DB_PATH", str(db))
@@ -37,11 +47,22 @@ def test_heatmap_returns_cells_and_unmapped(client):
     assert "coverage_pct" in body
 
 
-def test_heatmap_j_mapped_to_base(client):
+def test_heatmap_filters_out_letter_singles(client):
+    """J and K are pure typing — must not appear in the heatmap."""
     body = client.get("/api/stats/heatmap").json()
-    j_cell = next(c for c in body["cells"] if c["key"] == "J")
-    assert j_cell["layer"] == 0
-    assert j_cell["count"] == 5892
+    cell_keys = {c["key"] for c in body["cells"]}
+    assert "J" not in cell_keys
+    assert "K" not in cell_keys
+
+
+def test_heatmap_keeps_combos_and_derives_modifier(client):
+    """cmd+s should light up both S (base) and the cmd-producing position(s)."""
+    body = client.get("/api/stats/heatmap").json()
+    cell_keys = {c["key"] for c in body["cells"]}
+    # S appears because of cmd+s (count=50)
+    assert "S" in cell_keys
+    # cmd derivation surfaces a "cmd" cell
+    assert "cmd" in cell_keys
 
 
 def test_heatmap_f19_unmapped(client):
@@ -57,15 +78,11 @@ def test_heatmap_max_count_consistent(client):
         assert body["max_count"] >= max(c["count"] for c in body["cells"])
 
 
-def test_heatmap_coverage_pct(client):
-    body = client.get("/api/stats/heatmap").json()
-    total = sum(c["count"] for c in body["cells"]) + sum(u["count"] for u in body["unmapped"])
-    expected_pct = (sum(c["count"] for c in body["cells"]) / total * 100) if total else 0
-    assert abs(body["coverage_pct"] - expected_pct) < 0.01
-
-
 def test_heatmap_per_app_filter(client):
     body = client.get("/api/stats/heatmap?app=com.brave.Browser").json()
-    # Browser session has just "right" → arrow
-    keys = {c["key"] for c in body["cells"]}
-    assert keys == set() or "→" in keys
+    cell_keys = {c["key"] for c in body["cells"]}
+    # Browser has 'right' (arrow) + cmd+t — T + cmd should be lit, J/K from
+    # iterm2 must not leak across the filter.
+    assert "J" not in cell_keys
+    # At least one of the expected keys should be present
+    assert cell_keys & {"→", "T", "cmd"}

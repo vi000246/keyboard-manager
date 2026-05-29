@@ -141,6 +141,104 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .key.kind-empty       { background: transparent; border-style: dashed; opacity: 0.35; }
 .key.kind-unknown     { border-color: #c44; color: #fbb; }
 
+/* Combo participation badge: small cyan dot in the top-right corner.
+   `position: relative` keeps the `::after` pseudo anchored to the cell
+   even when the cell is also a layer-tap (which already uses ::before
+   conceptually via background-color, not pseudo, so no conflict). */
+.key.has-combo {
+  position: relative;
+}
+
+.key.has-combo::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4fb8c9;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* combo-highlight applies to ANY cell participating in a currently-active
+   combo (including the OUTPUT cell, which doesn't have its own .has-combo
+   dot — combos only badge their triggers). */
+.key.combo-highlight {
+  outline: 2px solid #4fb8c9;
+  outline-offset: -2px;
+  box-shadow: 0 0 12px rgba(79, 184, 201, 0.45);
+}
+
+/* Combo legend on the Interactive page — one row per configured combo,
+   highlighted when any of its triggers or its output is currently held. */
+.combo-legend {
+  margin-top: 1.5rem;
+  padding: 0.9rem 1rem;
+  background: #1c1c1c;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+}
+
+.combo-legend-title {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9aa;
+}
+
+.combo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  transition: background 0.1s ease, color 0.1s ease;
+}
+
+.combo-row + .combo-row { margin-top: 0.15rem; }
+
+.combo-row .combo-index {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  color: #4fb8c9;
+  min-width: 1.8rem;
+}
+
+.combo-row .combo-trigger {
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.combo-row .combo-arrow { color: #6b7280; }
+
+.combo-row .combo-output {
+  color: #9ab;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.combo-row.combo-active {
+  background: rgba(79, 184, 201, 0.18);
+  color: #e6f6fa;
+  outline: 1px solid rgba(79, 184, 201, 0.55);
+}
+.combo-row.combo-active .combo-output { color: #e6f6fa; }
+
+/* Macro badge: replaces label_bottom text + tints the border so the cell
+   reads as "this is a macro slot" at a glance. */
+.key.has-macro {
+  border-color: #c97a4f;
+}
+.key.has-macro .label-bottom {
+  color: #ffb98c;
+  font-style: italic;
+  letter-spacing: 0.03em;
+}
+
 /* ── Stats dashboard ────────────────────────────────────────────────── */
 
 .stats-toolbar {
@@ -399,10 +497,14 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
-/* On the Interactive view, only layer-tap cells are click-to-simulate. The
-   pointer cursor advertises that affordance; other cell kinds keep the
-   default cursor so users don't think clicking does something. */
-#view-interactive .key.kind-layer-tap {
+/* On the Interactive view, layer-activating cells are click-to-simulate.
+   The pointer cursor advertises that affordance; other cell kinds keep
+   the default cursor so users don't think clicking does something.
+   `.has-layer-target` is set by interactive.js on tap-dance cells whose
+   hold (or tap) branch is a layer key — those click-toggle the same as
+   plain MO/LT cells but don't have `kind-layer-tap`. */
+#view-interactive .key.kind-layer-tap,
+#view-interactive .key.has-layer-target {
   cursor: pointer;
 }
 
@@ -444,6 +546,7 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .kt-kind-empty         { border-left: 3px solid #444; }
 .kt-kind-unknown       { border-left: 3px solid #c44; }
 .kt-kind-plain         { border-left: 3px solid #4b5563; }
+.kt-kind-macro         { border-left: 3px solid #c97a4f; }
 
 .kt-section { padding: 0.5rem 0.8rem; }
 

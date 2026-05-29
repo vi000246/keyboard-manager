@@ -51,6 +51,7 @@
       return;
     }
 
+    const deco = window.gridRender.decorationsFor(layout);
     container.innerHTML = usedLayers
       .map((layer) => {
         const name = LAYER_NAMES[layer.index] || "";
@@ -58,7 +59,7 @@
         return `
           <section class="layer-block">
             <h2 class="layer-title">${escapeHtml(title)}</h2>
-            ${window.gridRender.renderLayer(layer)}
+            ${window.gridRender.renderLayer(layer, deco)}
           </section>`;
       })
       .join("");

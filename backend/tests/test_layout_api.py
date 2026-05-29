@@ -127,6 +127,55 @@ def test_health_endpoint_reports_vial_exists(client):
     assert body["vial_exists"] is True
 
 
+def test_macro_field_present_and_empty(client):
+    """mylayout.vil ships empty macro slots — the API surfaces an empty list,
+    not the 15 unset slots (those carry zero info and would clutter UI lookups)."""
+    body = client.get("/api/layout").json()
+    assert body["macro"] == []
+
+
+def test_macro_field_with_actions(monkeypatch, tmp_path):
+    """When .vil has macro actions, the API exposes index + raw + actions
+    so the frontend can attach a 'macro N' badge to MACRO{N} cells and
+    show the action list in the hover tooltip."""
+    import json
+    src = json.loads(FIXTURE.read_text())
+    # Drop a macro into slot 0 and slot 2 (slot 1 stays empty to verify
+    # filtering of unset entries).
+    src["macro"] = [
+        [["tap", "KC_H"], ["tap", "KC_I"]],
+        [],
+        [["text", "hello"]],
+    ]
+    p = tmp_path / "with_macros.vil"
+    p.write_text(json.dumps(src))
+    c = _client(monkeypatch, p, tmp_path / "t.db")
+    body = c.get("/api/layout").json()
+    assert len(body["macro"]) == 2
+    by_idx = {m["index"]: m for m in body["macro"]}
+    assert by_idx[0]["raw"] == "MACRO0"
+    assert by_idx[0]["actions"] == [["tap", "KC_H"], ["tap", "KC_I"]]
+    assert by_idx[2]["raw"] == "MACRO2"
+
+
+def test_macro_resolved_kind(monkeypatch, tmp_path):
+    """A MACRO0 cell in a layer should resolve to expanded_kind='macro' with
+    a human label, so the renderer can pick it up regardless of whether the
+    macro is defined yet."""
+    import json
+    src = json.loads(FIXTURE.read_text())
+    # Stick MACRO0 somewhere harmless on layer 0: replace KC_GRAVE (row 0 col 0)
+    src["layout"][0][0][0] = "MACRO0"
+    p = tmp_path / "macro_cell.vil"
+    p.write_text(json.dumps(src))
+    c = _client(monkeypatch, p, tmp_path / "t.db")
+    body = c.get("/api/layout").json()
+    cell = body["layers"][0]["rows"][0]["keys"][0]
+    assert cell["raw"] == "MACRO0"
+    assert cell["resolved"]["expanded_kind"] == "macro"
+    assert cell["resolved"]["label_top"] == "macro 0"
+
+
 def test_combo_includes_resolved_labels(client):
     """Combo serialization adds trigger_labels + output_label so the frontend
     tooltip can show 'J + K → Esc' without re-doing keycode resolution."""

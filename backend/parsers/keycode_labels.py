@@ -22,6 +22,12 @@ KEYCODE_LABELS: dict[str, str] = {
     "KC_LBRC": "[",
     "KC_RBRC": "]",
     "KC_BSLS": "\\",
+    # Older QMK aliases — same physical key, different name. Vial sometimes
+    # serializes the long form (KC_LBRACKET) instead of the short (KC_LBRC),
+    # so we accept both rather than asking the user to re-save their layout.
+    "KC_LBRACKET": "[",
+    "KC_RBRACKET": "]",
+    "KC_BSLASH": "\\",
     "KC_SCOLON": ";",
     "KC_QUOTE": "'",
     "KC_COMMA": ",",
@@ -70,4 +76,24 @@ KEYCODE_LABELS: dict[str, str] = {
     **{f"KC_F{i}": f"F{i}" for i in range(1, 25)},
     # ── Audio toggle (Vial firmware feature)
     "AU_TOG": "Audio",
+    # ── HID Application Control — system-wide edit actions. macOS routes
+    # these to the focused app's standard Edit menu.
+    "KC_COPY":  "Copy",
+    "KC_CUT":   "Cut",
+    "KC_PSTE":  "Paste",  # short form; some firmwares serialize KC_PASTE too
+    "KC_PASTE": "Paste",
+    "KC_UNDO":  "Undo",
+    "KC_AGAIN": "Redo",   # HID "Again" — Linux Redo; on macOS often unbound
+    "KC_FIND":  "Find",
+    # ── HID Browser Control
+    "KC_WBAK":  "Browser ←",
+    "KC_WFWD":  "Browser →",
+    "KC_WHOM":  "Browser Home",
+    "KC_WSCH":  "Browser Search",
+    "KC_WSTP":  "Browser Stop",
+    "KC_WREF":  "Browser Reload",
+    "KC_WFAV":  "Browser Favs",
+    # ── Vial layer-lock — toggles a "stick the active layer until tapped
+    # again" state. Useful for hold-free NAV / SYM usage.
+    "QK_LAYER_LOCK": "Lock layer",
 }

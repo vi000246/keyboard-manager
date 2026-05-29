@@ -11,7 +11,13 @@ from typing import Literal
 from fastapi import APIRouter, Query
 
 from ..db.app_names import friendly_name
-from ..db.heatmap_mapper import build_position_index, overlay_stats
+from ..db.heatmap_mapper import (
+    build_combo_position_index,
+    build_modifier_position_index,
+    build_position_index,
+    filter_typing_singles,
+    overlay_stats,
+)
 from ..db.repository import AppsRepo, StatsRepo
 from ..parsers.vial import parse
 
@@ -43,28 +49,48 @@ def get_apps():
 def get_heatmap(app: str | None = None):
     """Return per-position counts for the keyboard heatmap overlay.
 
-    Pulls a generous top-500 single-key rows (covers >99% of keystrokes in
-    practice), projects each onto its physical position via the keymap, and
-    returns mapped cells + unmapped keys + coverage_pct.
+    The heatmap is the "shortcut surface" view: every combo (`modifiers != ''`)
+    is included plus any non-typing single keys (arrows, F-keys, navigation,
+    etc.). Plain-typing singles — letters, digits, space/enter/bksp, common
+    punctuation — are filtered out so the heatmap reflects deliberate hotkey
+    usage rather than how much English the user types.
+
+    For combo rows, the modifier portion is also credited to the physical
+    modifier key(s) on the active layout (cmd → LGUI_T positions, ctrl → TD
+    branches holding LCTL, etc.). Multi-mod sources like ALL_T are skipped
+    because we can't tell which modifier the user actually wanted.
+
+    `coverage_pct` is computed over included events (post-filter) so it reflects
+    "how much of what we're surfacing is mapped to a physical key".
     """
     from ..main import DB_PATH, VIAL_PATH
 
     layout = parse(VIAL_PATH)
-    idx = build_position_index(layout)
+    base_idx = build_position_index(layout)
+    mod_idx = build_modifier_position_index(layout)
+    combo_idx = build_combo_position_index(layout)
     repo = StatsRepo(DB_PATH)
-    rows = repo.top_n(app=app, kind="single", n=500)
-    result = overlay_stats(idx, rows)
+    # Pull both kinds so we can show combos plus the functional singles
+    # (arrows / F-keys / Esc / Tab) that survive the typing filter.
+    rows = filter_typing_singles(
+        repo.top_n(app=app, kind="all", n=1000)
+    )
+    result = overlay_stats(
+        base_idx, rows, modifier_index=mod_idx, combo_index=combo_idx
+    )
 
-    mapped = sum(c["count"] for c in result["cells"])
-    unmapped = sum(u["count"] for u in result["unmapped"])
-    total = mapped + unmapped
+    # Coverage measured against raw included events (before modifier derivation
+    # inflates cell totals), so the % matches what's in `rows`.
+    included_total = sum(r["total"] for r in rows)
+    unmapped_total = sum(u["count"] for u in result["unmapped"])
+    mapped_total = included_total - unmapped_total
 
     return {
         "scope": {"app": app},
         "max_count": result["max_count"],
         "cells": result["cells"],
         "unmapped": result["unmapped"],
-        "coverage_pct": (mapped / total * 100) if total else 0.0,
+        "coverage_pct": (mapped_total / included_total * 100) if included_total else 0.0,
     }
 
 
@@ -73,24 +99,34 @@ def get_stats(
     app: str | None = None,
     top: int = Query(50, ge=1, le=500),
     kind: Literal["single", "mod", "all"] = "single",
+    key: str | None = None,
 ):
     from ..main import DB_PATH
 
     repo = StatsRepo(DB_PATH)
-    rows = repo.top_n(app=app, kind=kind, n=top)
+    # When the key filter is active, surface ALL matching combos — even rare
+    # ones (count=1) — by ignoring the `top` cap. The user is explicitly
+    # narrowing the result set; truncating to top-N would hide the long tail
+    # of one-off combos they're often hunting for. 10000 is a hard safety
+    # cap to keep the response bounded if someone passes an empty-ish filter
+    # against a huge events table.
+    effective_n = 10000 if key else top
+    rows = repo.top_n(app=app, kind=kind, n=effective_n, key_filter=key)
 
-    # Total within the same scope (kind+app filter) drives the % column.
-    # Use raw events filtered by the same predicate so percentages add up to ~100.
+    # Total within the same scope (kind+app+key filter) drives the % column.
+    # Applying the key filter here too means pct represents "share of the
+    # filtered scope" — e.g. with key="cmd", Cmd+C's pct is its share of
+    # all Cmd combos, not of all events overall (which would be unhelpfully
+    # small numbers that don't add to anything meaningful).
     if kind == "single":
-        # Only count rows where modifiers='' for the denominator
-        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers = ''")
+        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers = ''", key=key)
     elif kind == "mod":
-        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers != ''")
+        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers != ''", key=key)
     else:
-        scope_total = _scoped_total(DB_PATH, app=app, where="1=1")
+        scope_total = _scoped_total(DB_PATH, app=app, where="1=1", key=key)
 
     return {
-        "scope": {"app": app, "kind": kind, "top": top},
+        "scope": {"app": app, "kind": kind, "top": top, "key": key},
         "total_events": scope_total,
         "rows": [
             {
@@ -104,8 +140,10 @@ def get_stats(
     }
 
 
-def _scoped_total(db_path, app: str | None, where: str) -> int:
-    """Sum of count over events matching {where} (+ optional app filter)."""
+def _scoped_total(
+    db_path, app: str | None, where: str, key: str | None = None
+) -> int:
+    """Sum of count over events matching {where} (+ optional app/key filter)."""
     import sqlite3
 
     params: list = []
@@ -113,10 +151,16 @@ def _scoped_total(db_path, app: str | None, where: str) -> int:
     if app:
         app_clause = "AND app_bundle = ?"
         params.append(app)
+    key_clause = ""
+    if key:
+        key_clause = "AND (LOWER(key) LIKE ? OR LOWER(modifiers) LIKE ?)"
+        like = f"%{key.lower()}%"
+        params.extend([like, like])
     conn = sqlite3.connect(db_path)
     try:
         row = conn.execute(
-            f"SELECT COALESCE(SUM(count), 0) FROM events WHERE {where} {app_clause}",
+            f"SELECT COALESCE(SUM(count), 0) "
+            f"FROM events WHERE {where} {app_clause} {key_clause}",
             params,
         ).fetchone()
         return row[0] or 0

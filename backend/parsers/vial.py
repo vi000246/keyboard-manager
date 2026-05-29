@@ -46,12 +46,28 @@ class Combo:
 
 
 @dataclass(frozen=True)
+class Macro:
+    """A single Vial macro entry.
+
+    `actions` is the raw list-of-lists from the .vil — Vial encodes each
+    step as ``["tap", "KC_X"]`` / ``["down", "KC_LSHIFT"]`` /
+    ``["text", "hello"]`` / ``["delay", 200]`` etc. We keep the raw form
+    instead of normalizing to a struct because (a) the action vocabulary
+    is open-ended and (b) the only consumer right now is the tooltip,
+    which can render whatever it gets.
+    """
+    index: int
+    actions: list
+
+
+@dataclass(frozen=True)
 class Layout:
     vial_protocol: int
     uid: int
     layers: list[Layer]
     tap_dance: list[TapDance]
     combo: list[Combo]
+    macros: list[Macro]
 
 
 def parse(path: Path) -> Layout:
@@ -101,10 +117,20 @@ def parse(path: Path) -> Layout:
         triggers = [k for k in c[:4] if k != "KC_NO"]
         combos.append(Combo(index=ci, triggers=triggers, output=c[4]))
 
+    # Vial keeps a fixed-size macro array; entries are lists of action arrays.
+    # Empty inner lists mean "macro N is unset" — preserve the index so the
+    # frontend can correlate a MACRO{N} keycode to its definition (or lack
+    # thereof) without doing arithmetic on positions.
+    macros: list[Macro] = []
+    for mi, raw_actions in enumerate(data.get("macro", [])):
+        actions_list = raw_actions if isinstance(raw_actions, list) else []
+        macros.append(Macro(index=mi, actions=actions_list))
+
     return Layout(
         vial_protocol=proto,
         uid=data.get("uid", 0),
         layers=layers,
         tap_dance=tap_dance,
         combo=combos,
+        macros=macros,
     )

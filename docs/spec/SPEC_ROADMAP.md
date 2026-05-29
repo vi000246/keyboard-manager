@@ -1,6 +1,6 @@
 # Spec Roadmap
 
-> Auto-updated index. Last updated: 2026-05-28
+> Auto-updated index. Last updated: 2026-05-28（含 stats heatmap refinement + combo/macro UX 同步）
 >
 > **AI Agents**: Read this file first to decide which specs to load. Load only what's relevant to your task to avoid context bloat.
 
@@ -25,3 +25,5 @@
 | Date | Module | Feature SRS | One-line Summary |
 |------|--------|-------------|-----------------|
 | 2026-05-28 | `keyboard-manager` | [keyboard-manager-mvp.srs.md](../srs/keyboard-manager-mvp.srs.md) | MVP foundational delivery — `.vil` parser, SQLite stats, heatmap, native helper, live simulator |
+| 2026-05-28 | `keyboard-manager` | — (spec inline change) | Heatmap refined to shortcut surface — typing keys filtered, modifier derivation, combo position index for firmware-level shortcuts |
+| 2026-05-28 | `keyboard-manager` | — (spec inline change) | Combo / macro visual layer — corner-dot trigger badge, `expanded_kind="macro"` resolver path, Interactive combo legend with synchronized highlight, helper VK pairing to fix combo chip residue |

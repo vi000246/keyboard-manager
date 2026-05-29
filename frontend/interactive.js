@@ -192,9 +192,9 @@
     }
     for (const pos of virtualHeld) {
       const slot = slotAt(pos);
-      if (!slot || slot.resolved.expanded_kind !== "layer-tap") continue;
-      const m = (slot.resolved.label_bottom || "").match(/L(\d+)/);
-      if (m) target = parseInt(m[1], 10);
+      if (!slot) continue;
+      const t = _layerTargetOf(slot.resolved);
+      if (t !== null) target = t;
     }
     return target;
   }
@@ -203,6 +203,31 @@
     if (!layout) return null;
     const [r, c] = pos.split(":").map(Number);
     return layout.layers[0]?.rows[r]?.keys[c] || null;
+  }
+
+  // Layer-target extractor — returns the layer index N if this resolved cell
+  // activates a layer when held, else null. Two kinds activate:
+  //   - "layer-tap" (MO / LT): layer N is encoded in label_bottom as "L{N}"
+  //   - "tap-dance" whose hold OR tap branch is MO(N): the branch label_top
+  //     is "→L{N}" (set by the MO resolver). We prefer hold (the idiomatic
+  //     place for layer activation in TD) and fall back to tap.
+  // We don't try to dig LT(N, kc) out of a TD branch — that branch's
+  // label_top is the inner key, not the layer arrow, so the layer info
+  // doesn't reach this resolved struct. The MO-inside-TD case is the one
+  // users hit in practice.
+  function _layerTargetOf(resolved) {
+    if (!resolved) return null;
+    if (resolved.expanded_kind === "layer-tap") {
+      const m = (resolved.label_bottom || "").match(/L(\d+)/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    if (resolved.expanded_kind === "tap-dance") {
+      const hold = resolved.hold || "";
+      const tap = resolved.tap || "";
+      const m = hold.match(/→L(\d+)/) || tap.match(/→L(\d+)/);
+      return m ? parseInt(m[1], 10) : null;
+    }
+    return null;
   }
 
   // ── Layer-name lookup ──────────────────────────────────────────────
@@ -233,10 +258,9 @@
       if (!slot) return "";
       const r = slot.resolved;
       const baseName = r.label_top || "?";
-      if (r.expanded_kind === "layer-tap") {
-        const m = (r.label_bottom || "").match(/L(\d+)/);
-        const target = m ? parseInt(m[1], 10) : null;
-        const nice = target !== null ? `L${target}${layerName(target) ? ` ${layerName(target)}` : ""}` : "?";
+      const target = _layerTargetOf(r);
+      if (target !== null) {
+        const nice = `L${target}${layerName(target) ? ` ${layerName(target)}` : ""}`;
         return `<span class="chip chip-layer chip-virtual">${escapeHtml(baseName)} <span class="chip-arrow">→</span> ${escapeHtml(nice)} <span class="chip-virtual-tag">click</span></span>`;
       }
       return `<span class="chip chip-virtual">${escapeHtml(baseName)} <span class="chip-virtual-tag">click</span></span>`;
@@ -299,7 +323,8 @@
       root.innerHTML = `<p class="error">layout load failed</p>`;
       return;
     }
-    const gridHtml = window.gridRender.renderLayer(layout.layers[activeLayer]);
+    const deco = window.gridRender.decorationsFor(layout);
+    const gridHtml = window.gridRender.renderLayer(layout.layers[activeLayer], deco);
     const layerLbl = layerName(activeLayer);
     root.innerHTML = `
       <div class="interactive-status">
@@ -312,9 +337,122 @@
       ${gridHtml}
       <div class="held-chips held-chips-big" aria-label="currently held keys">
         ${buildHeldChips()}
-      </div>`;
+      </div>
+      ${buildComboLegend()}`;
     const gridRoot = root.querySelector(".keyboard");
-    if (gridRoot) applyPressed(gridRoot);
+    if (gridRoot) {
+      applyPressed(gridRoot);
+      applyComboHighlight(gridRoot);
+      markLayerClickableCells(gridRoot);
+    }
+  }
+
+  // Paint `.has-layer-target` on every cell whose BASE-layer slot is a
+  // tap-dance with a layer-key branch, so CSS shows the pointer cursor
+  // matching the existing MO/LT affordance. We key off BASE regardless
+  // of which layer is currently visible — the click handler also reads
+  // BASE — so the hint stays consistent when previewing other layers.
+  function markLayerClickableCells(gridRoot) {
+    gridRoot.querySelectorAll(".key.has-layer-target").forEach((el) =>
+      el.classList.remove("has-layer-target")
+    );
+    const base = layout?.layers[0];
+    if (!base) return;
+    for (let r = 0; r < base.rows.length; r++) {
+      const rowEl = gridRoot.querySelector(`.row.row-${r}`);
+      if (!rowEl) continue;
+      const cells = rowEl.querySelectorAll(".key");
+      for (let c = 0; c < base.rows[r].keys.length; c++) {
+        const k = base.rows[r].keys[c];
+        if (!k || k.resolved.expanded_kind !== "tap-dance") continue;
+        if (_layerTargetOf(k.resolved) === null) continue;
+        if (cells[c]) cells[c].classList.add("has-layer-target");
+      }
+    }
+  }
+
+  // ── Combo legend ─────────────────────────────────────────────────────
+  //
+  // We render the legend as part of every full render() — re-rendering is
+  // cheap and avoids dual sources of truth on which combos are active.
+  // Each row carries `data-combo-index` so applyComboHighlight can light
+  // it up without re-parsing the legend text.
+
+  function buildComboLegend() {
+    const combos = (layout?.combo || []).filter(
+      (c) => Array.isArray(c.triggers) && c.triggers.length > 0
+    );
+    if (combos.length === 0) return "";
+    const rows = combos
+      .map((c) => {
+        const triggers = (c.trigger_labels || c.triggers).map(escapeHtml).join(" + ");
+        const output = escapeHtml(c.output_label || c.output || "?");
+        return `
+          <div class="combo-row" data-combo-index="${c.index}">
+            <span class="combo-index">C${c.index}</span>
+            <span class="combo-trigger">${triggers}</span>
+            <span class="combo-arrow">→</span>
+            <span class="combo-output">${output}</span>
+          </div>`;
+      })
+      .join("");
+    return `
+      <section class="combo-legend" aria-label="configured combos">
+        <h3 class="combo-legend-title">Combos</h3>
+        ${rows}
+      </section>`;
+  }
+
+  /**
+   * Highlight combo rows + the participating cells in the grid whenever
+   * any of the combo's triggers OR its output are currently held.
+   *
+   * QMK firmware fires the combo by swallowing the trigger keydowns and
+   * only emitting the output, so when J+K → Esc fires, macOS sees just
+   * "escape". We treat output-held as combo-active so the user can still
+   * see WHICH combo fired by looking at the lit legend row.
+   *
+   * Output-held is necessarily ambiguous when the combo output is also a
+   * key the user could press alone (e.g. Esc is reachable via TD(1) tap).
+   * We accept that — over-highlighting is less confusing than silently
+   * dropping the combo annotation.
+   */
+  function applyComboHighlight(gridRoot) {
+    gridRoot.querySelectorAll(".combo-highlight").forEach((el) =>
+      el.classList.remove("combo-highlight")
+    );
+    root.querySelectorAll(".combo-row.combo-active").forEach((el) =>
+      el.classList.remove("combo-active")
+    );
+    if (!layout || !Array.isArray(layout.combo) || heldKeys.size === 0) return;
+
+    const heldLabels = new Set();
+    for (const h of heldKeys) {
+      const l = labelFor(h);
+      if (l) heldLabels.add(l);
+    }
+
+    for (const c of layout.combo) {
+      if (!Array.isArray(c.triggers) || c.triggers.length === 0) continue;
+      const triggerLabels = c.trigger_labels || c.triggers;
+      const outputLabel = c.output_label || c.output;
+      const triggerHit = triggerLabels.some((l) => heldLabels.has(l));
+      const outputHit = outputLabel && heldLabels.has(outputLabel);
+      if (!triggerHit && !outputHit) continue;
+
+      const row = root.querySelector(`.combo-row[data-combo-index="${c.index}"]`);
+      if (row) row.classList.add("combo-active");
+
+      // Light up every cell whose label_top matches a trigger or the output.
+      // We match by the rendered top label rather than raw because the
+      // output may live on a TD branch (e.g. KC_ESCAPE is TD(1).tap, so
+      // its cell's raw is "TD(1)" — not directly comparable).
+      const wanted = new Set([...triggerLabels, outputLabel].filter(Boolean));
+      gridRoot.querySelectorAll(".key").forEach((cell) => {
+        const top = cell.querySelector(".label-top")?.textContent?.trim();
+        if (top && wanted.has(top)) cell.classList.add("combo-highlight");
+      });
+    }
   }
 
   function escapeHtml(s) {
@@ -383,13 +521,15 @@
   }
 
   /**
-   * Click a layer-tap cell to toggle a virtual hold. This exists because
-   * QMK firmware emits no macOS event during a real LT hold — it swaps the
-   * active layer internally — so the only way to preview a layered layout
-   * without typing on it is to click. We deliberately do NOT accept
-   * mod-tap or tap-dance here: those modifiers fire perfectly well via a
-   * physical press, and click-simulating them would be confusing (e.g.
-   * "I clicked the Hyper key, does that also block my real Shift?").
+   * Click a layer-activating cell to toggle a virtual hold. This exists
+   * because QMK firmware emits no macOS event during a real LT / MO hold
+   * — it swaps the active layer internally — so the only way to preview
+   * a layered layout without typing on it is to click. We accept any cell
+   * whose `_layerTargetOf` returns a layer index: plain layer-tap (LT, MO)
+   * AND tap-dance cells whose hold (or tap) branch is a layer key. We
+   * still reject mod-tap and plain-mod cells: those modifiers fire fine
+   * via a physical press, and click-simulating them would be confusing
+   * (e.g. "I clicked Hyper, does that block my real Shift?").
    */
   function wireClickToSimulate() {
     root.addEventListener("click", (e) => {
@@ -404,7 +544,7 @@
       if (Number.isNaN(row) || Number.isNaN(col) || !layout) return;
       const baseSlot = layout.layers[0]?.rows[row]?.keys[col];
       if (!baseSlot) return;
-      if (baseSlot.resolved.expanded_kind !== "layer-tap") return;
+      if (_layerTargetOf(baseSlot.resolved) === null) return;
       const pos = `${row}:${col}`;
       if (virtualHeld.has(pos)) virtualHeld.delete(pos);
       else virtualHeld.add(pos);

@@ -64,3 +64,28 @@ def test_parse_combo_index_0_jk_to_esc():
     assert c0.index == 0
     assert c0.triggers == ["KC_J", "KC_K"]
     assert c0.output == "KC_ESCAPE"
+
+
+def test_parse_macros_array_preserved_when_empty():
+    """mylayout.vil has 15 empty macro slots — they must still parse, not crash."""
+    layout = parse(FIXTURE)
+    assert len(layout.macros) == 15
+    assert all(m.actions == [] for m in layout.macros)
+    assert layout.macros[0].index == 0
+
+
+def test_parse_macro_with_actions(tmp_path):
+    """A populated macro array should preserve action sequences verbatim."""
+    import json
+    src = json.loads(FIXTURE.read_text())
+    src["macro"] = [
+        [["tap", "KC_H"], ["tap", "KC_I"]],
+        [["text", "hello"]],
+        [],
+    ]
+    p = tmp_path / "with_macros.vil"
+    p.write_text(json.dumps(src))
+    layout = parse(p)
+    assert layout.macros[0].actions == [["tap", "KC_H"], ["tap", "KC_I"]]
+    assert layout.macros[1].actions == [["text", "hello"]]
+    assert layout.macros[2].actions == []
