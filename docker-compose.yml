@@ -8,8 +8,9 @@ services:
       # 8001 on host (8000 is commonly occupied); 8000 inside the container.
       - "${KM_BACKEND_PORT:-8001}:8000"
     volumes:
-      # Vial config — read-only mount
-      - ${VIAL_CONFIG:-${HOME}/Projects/keyboard-map/mylayout.vil}:/data/mylayout.vil:ro
+      # Vial config — read-only mount. Default is the bundled sample; override
+      # with VIAL_CONFIG to point at your live Vial export.
+      - ${VIAL_CONFIG:-${HOME}/Projects/keyboard-manager/sample/mylayout.vil}:/data/mylayout.vil:ro
       # SQLite stats database — read-write, persisted on host
       - ${KEYSTAT_DB:-${HOME}/Library/Application Support/keyboard-manager}:/data/db
     environment:

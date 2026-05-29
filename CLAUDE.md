@@ -32,10 +32,10 @@ keyboard-manager/
 | `docs/PRD.md` | Product intent — problem, hypothesis, milestones |
 | `docs/architecture.md` | Component map, data shape, endpoints |
 | `~/.claude/plans/claude-init-git-init-fancy-pinwheel.md` | The canonical bootstrap + design plan |
-| `~/Projects/keyboard-map/spec.md` | Keyboard layout spec (what the `.vil` was designed to express) |
-| `~/Projects/keyboard-map/hotkey-analysis.md` | 8-day, 137k-keystroke stats baseline (the data we want to visualize) |
-| `~/Projects/keyboard-map/keystat_analyze.py` | The aggregation logic to port into the backend |
-| `~/Projects/keyboard-map/mylayout.vil` | The actual Vial config — main parsing target |
+| `docs/keyboard-map/spec.md` | Keyboard layout spec (what the `.vil` was designed to express) |
+| `docs/keyboard-map/hotkey-analysis.md` | 8-day, 137k-keystroke stats baseline (the data we want to visualize) |
+| `docs/keyboard-map/keystat_analyze.py` | The aggregation logic that was ported into the backend |
+| `sample/mylayout.vil` | The default Vial config — main parsing target (override with `VIAL_CONFIG`) |
 | `docs/macos-accessibility.md` | One-time Accessibility permission setup for the native helper (the `Python.app` gotcha) |
 
 ## Project conventions
@@ -95,4 +95,4 @@ cd native-helper && python main.py
 2. `docs/PRD.md`
 3. `docs/architecture.md`
 4. The plan file referenced above
-5. `~/Projects/keyboard-map/mylayout.vil` (just `head` enough to see the shape)
+5. `sample/mylayout.vil` (just `head` enough to see the shape)

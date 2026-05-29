@@ -239,6 +239,138 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   letter-spacing: 0.03em;
 }
 
+/* ── Cheatsheet: all layers overlaid on one printable board ───────────── */
+
+.cs-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.cs-toolbar button {
+  background: #2a4d7a;
+  color: #fff;
+  border: 1px solid #4a7dba;
+  padding: 0.4rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+.cs-toolbar button:hover { background: #335c93; }
+.cs-hint { color: #888; font-size: 0.82rem; }
+
+.cs-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.2rem;
+  margin-bottom: 1.2rem;
+  font-size: 0.82rem;
+}
+.cs-li { display: inline-flex; align-items: center; gap: 0.4rem; }
+.cs-li i { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; }
+
+.cs-board { margin-bottom: 1.5rem; }
+
+.cs-key {
+  position: relative;
+  height: 4.6rem;
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  background: #232323;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  text-align: center;
+  overflow: hidden;
+  user-select: none;
+  padding: 0.2rem 0.25rem 0.15rem;
+}
+.cs-key.gap { background: transparent; border: none; }
+
+/* Top block: base legend + (optional) hold tag, baseline-aligned. */
+.cs-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 1.1rem;
+}
+.cs-base {
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.05;
+  color: #f0f0f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-hold {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #f061d4;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* Per-layer lines under the base — each ellipsis-truncates on its own. */
+.cs-ovs {
+  display: flex;
+  flex-direction: column;
+  margin-top: 0.15rem;
+  gap: 0.02rem;
+  min-width: 0;
+}
+.cs-ov {
+  font-size: 0.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.cs-key.has-combo::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4fb8c9;
+}
+
+.cs-combos { max-width: none; }
+.cs-foot { color: #888; font-size: 0.78rem; margin-top: 1rem; }
+
+/* Print: white sheet, hide chrome, keep layer colours. */
+@media print {
+  @page { size: landscape; margin: 10mm; }
+  body { background: #fff; color: #000; }
+  header, .cs-toolbar, .cs-hint, .cs-foot { display: none !important; }
+  main { padding: 0; max-width: none; }
+  #view-cheatsheet.hidden { display: block !important; }
+  .view:not(#view-cheatsheet) { display: none !important; }
+  .cs-board { flex-wrap: nowrap; gap: 1.2rem; }
+  .cs-board .row { grid-template-columns: repeat(7, 3.6rem); gap: 0.25rem; }
+  .cs-key {
+    height: 4.2rem;
+    background: #fff;
+    border: 1px solid #333;
+  }
+  .cs-base { color: #000; }
+  .cs-base { color: #000; }
+  .cs-legend { color: #000; }
+  .combo-legend { background: #fff; border: 1px solid #999; }
+  .combo-row, .combo-row .combo-output { color: #000; }
+  .combo-legend-title { color: #333; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
 /* ── Stats dashboard ────────────────────────────────────────────────── */
 
 .stats-toolbar {

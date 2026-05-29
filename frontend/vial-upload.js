@@ -34,6 +34,7 @@
    */
   function notifyLayoutChanged() {
     if (window.staticViewer?.refresh) window.staticViewer.refresh();
+    if (window.cheatsheet?.refresh) window.cheatsheet.refresh();
     if (window.statsDashboard?.refresh) window.statsDashboard.refresh();
     if (window.interactiveSim?.refresh) window.interactiveSim.refresh();
   }

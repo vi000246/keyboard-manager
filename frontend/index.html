@@ -11,6 +11,7 @@
     <h1>keyboard-manager</h1>
     <nav>
       <button data-view="static" class="active">Static Viewer</button>
+      <button data-view="cheatsheet">Cheatsheet</button>
       <button data-view="interactive">Interactive</button>
       <button data-view="stats">Stats</button>
     </nav>
@@ -30,6 +31,9 @@
     <section id="view-static" class="view">
       <p class="placeholder">loading layout…</p>
     </section>
+    <section id="view-cheatsheet" class="view hidden">
+      <p class="placeholder">loading cheatsheet…</p>
+    </section>
     <section id="view-interactive" class="view hidden">
       <p class="placeholder">click this tab to start the live simulator</p>
     </section>
@@ -42,6 +46,7 @@
   <script src="grid-render.js"></script>
   <script src="key-tooltip.js"></script>
   <script src="static-viewer.js"></script>
+  <script src="cheatsheet.js"></script>
   <script src="heatmap.js"></script>
   <script src="stats.js"></script>
   <script src="interactive.js"></script>

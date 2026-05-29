@@ -1,6 +1,6 @@
 """Keystat event-key helpers.
 
-Ported from ~/Projects/keyboard-map/keystat_analyze.py (lines 60-68). The
+Ported from docs/keyboard-map/keystat_analyze.py (lines 60-68). The
 sibling project's logic has been validated against 8 days / 137k keystrokes;
 this is a verbatim port plus `serialize_mods` for consistent SQLite storage.
 """

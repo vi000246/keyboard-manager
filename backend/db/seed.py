@@ -1,6 +1,6 @@
 """App bucket taxonomy.
 
-Ported from ~/Projects/keyboard-map/keystat_analyze.py:20-48. Bundle IDs are
+Ported from docs/keyboard-map/keystat_analyze.py:20-48. Bundle IDs are
 grouped into 5 buckets so the stats UI can filter by workflow context (terminal
 vim/tmux vs browser BBS, etc).
 
