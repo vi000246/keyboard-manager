@@ -138,12 +138,62 @@
     return { board, overlayIdx };
   }
 
-  function renderLegend(overlayIdx) {
-    const chip = (color, label) =>
-      `<span class="cs-li"><i style="background:${color}"></i>${escapeHtml(label)}</span>`;
+  // For each non-base layer, work out HOW you reach it: scan every key for a
+  // layer-switch action — LTn (hold layer-tap), MO/TT (momentary), TG/TO
+  // (toggle) — and record the trigger tag (e.g. "LT1") plus the physical keys
+  // it sits on (e.g. Tab / Del). Used to annotate the legend so the coloured
+  // NAV/SYM lines say which key to hold.
+  function activatorsByLayer(layout) {
+    const map = {}; // idx -> { tags:Set, keys:Set, hold:bool }
+    const add = (idx, tag, keyLabel, hold) => {
+      if (!map[idx]) map[idx] = { tags: new Set(), keys: new Set(), hold };
+      map[idx].tags.add(tag);
+      if (keyLabel) map[idx].keys.add(keyLabel);
+      if (hold) map[idx].hold = true;
+    };
+    const PATTERNS = [
+      [/^LT(\d+)\(/, (n) => `LT${n}`, true],
+      [/^MO\((\d+)\)/, () => "MO", true],
+      [/^TT\((\d+)\)/, () => "TT", true],
+      [/^TG\((\d+)\)/, () => "TG", false],
+      [/^TO\((\d+)\)/, () => "TO", false],
+    ];
+    for (const layer of layout.layers || []) {
+      for (const row of layer.rows) {
+        for (const k of row.keys) {
+          if (!k || !k.raw) continue;
+          const keyLabel = (k.resolved && k.resolved.label_top) || "";
+          for (const [re, tag, hold] of PATTERNS) {
+            const m = k.raw.match(re);
+            if (m) {
+              add(+m[1], tag(m[1]), keyLabel, hold);
+              break;
+            }
+          }
+        }
+      }
+    }
+    return map;
+  }
+
+  function renderLegend(overlayIdx, layout) {
+    const act = activatorsByLayer(layout);
+    const chip = (color, label, hint) =>
+      `<span class="cs-li"><i style="background:${color}"></i>` +
+      `<span>${escapeHtml(label)}</span>` +
+      (hint ? `<span class="cs-li-act">${escapeHtml(hint)}</span>` : "") +
+      `</span>`;
     const items = [chip(LAYER_COLORS[0], LAYER_NAMES[0] || "BASE")];
     for (const idx of overlayIdx) {
-      items.push(chip(LAYER_COLORS[idx] || "#555", LAYER_NAMES[idx] || `L${idx}`));
+      const a = act[idx];
+      let hint = "";
+      if (a && a.tags.size) {
+        const tags = [...a.tags].join("／");
+        const keys = [...a.keys].join("／");
+        const verb = a.hold ? "長按" : "切換";
+        hint = keys ? `${verb} ${tags}（${keys}）` : `${verb} ${tags}`;
+      }
+      items.push(chip(LAYER_COLORS[idx] || "#555", LAYER_NAMES[idx] || `L${idx}`, hint));
     }
     items.push(chip(HOLD_COLOR, "長按 hold"));
     return `<div class="cs-legend">${items.join("")}</div>`;
@@ -175,28 +225,35 @@
 
   function renderTapDance(layout) {
     if (!Array.isArray(layout.tap_dance)) return "";
+    // Only add the "tap+hold" column when some tap-dance actually uses it, so
+    // layouts without it keep the table tight (TD / tap / hold / 2×).
+    const hasTH = layout.tap_dance.some((td) => td.tap_hold_label);
+    const cellHtml = (v) => (v ? escapeHtml(v) : `<span class="td-none">–</span>`);
     const rows = [];
     for (const td of layout.tap_dance) {
-      const parts = [];
-      if (td.tap_label) parts.push([`tap`, aliasOr(td.tap, td.tap_label)]);
-      if (td.hold_label) parts.push([`hold`, aliasOr(td.hold, td.hold_label)]);
-      if (td.double_tap_label) parts.push([`2×`, aliasOr(td.double_tap, td.double_tap_label)]);
-      if (td.tap_hold_label) parts.push([`t+h`, aliasOr(td.tap_hold, td.tap_hold_label)]);
-      if (parts.length === 0) continue;
-      const body = parts
-        .map(
-          ([k, v]) =>
-            `<span class="td-act"><span class="td-k">${k}</span>${escapeHtml(v)}</span>`
-        )
-        .join('<span class="td-sep">·</span>');
+      const tap = td.tap_label ? aliasOr(td.tap, td.tap_label) : "";
+      const hold = td.hold_label ? aliasOr(td.hold, td.hold_label) : "";
+      const dbl = td.double_tap_label ? aliasOr(td.double_tap, td.double_tap_label) : "";
+      const th = td.tap_hold_label ? aliasOr(td.tap_hold, td.tap_hold_label) : "";
+      if (!tap && !hold && !dbl && !th) continue;
       rows.push(
-        `<div class="combo-row"><span class="combo-index">TD${td.index}</span>${body}</div>`
+        `<tr>` +
+          `<td class="td-c-id">TD${td.index}</td>` +
+          `<td>${cellHtml(tap)}</td>` +
+          `<td>${cellHtml(hold)}</td>` +
+          `<td>${cellHtml(dbl)}</td>` +
+          (hasTH ? `<td>${cellHtml(th)}</td>` : "") +
+          `</tr>`
       );
     }
     if (rows.length === 0) return "";
+    const head =
+      `<tr><th>TD</th><th>點按</th><th>長按</th><th>2×</th>` +
+      (hasTH ? `<th>點+長</th>` : "") +
+      `</tr>`;
     return (
       `<div class="combo-legend cs-ref-box"><div class="combo-legend-title">Tap Dance</div>` +
-      rows.join("") +
+      `<table class="td-table"><thead>${head}</thead><tbody>${rows.join("")}</tbody></table>` +
       `</div>`
     );
   }
@@ -226,7 +283,7 @@
       `<button id="cs-print-btn" type="button">🖨 列印 / 存 PDF</button>` +
       `<span class="cs-hint">上傳新的 .vil（上方 Load Vial…）即會自動更新此圖。列印請選「橫向」。</span>` +
       `</div>` +
-      renderLegend(built.overlayIdx) +
+      renderLegend(built.overlayIdx, layout) +
       built.board +
       `<div class="cs-refs">${renderCombos(layout)}${renderTapDance(layout)}</div>` +
       `<div class="cs-foot">中央＝點按 · 旁邊洋紅＝長按 · 下方彩色＝各 layer · ●＝參與 combo</div>`;

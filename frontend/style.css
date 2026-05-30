@@ -270,6 +270,8 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 }
 .cs-li { display: inline-flex; align-items: center; gap: 0.4rem; }
 .cs-li i { width: 0.7rem; height: 0.7rem; border-radius: 2px; display: inline-block; }
+/* How to enter a layer, e.g. "長按 LT1（Tab／Del）" beside its colour chip. */
+.cs-li-act { color: #9aa4b2; font-size: 0.76rem; }
 
 .cs-board { margin-bottom: 1.5rem; }
 
@@ -347,15 +349,23 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 /* Combos + Tap Dance reference boxes, side by side. */
 .cs-refs { display: flex; gap: 1.2rem; align-items: flex-start; flex-wrap: wrap; }
 .cs-ref-box { flex: 1 1 22rem; max-width: none; margin-top: 0; }
-.td-act { color: #cbd5e1; }
-.td-k {
-  color: #94a3b8;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  margin-right: 0.25rem;
+/* Tap Dance reference table — one column per branch, aligned. */
+.td-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.td-table th,
+.td-table td {
+  text-align: left;
+  padding: 0.18rem 0.55rem;
+  white-space: nowrap;
 }
-.td-sep { color: #4b5563; margin: 0 0.45rem; }
+.td-table th {
+  color: #94a3b8;
+  font-weight: 600;
+  border-bottom: 1px solid #3a3a3a;
+}
+.td-table td { color: #cbd5e1; }
+.td-table tbody tr + tr td { border-top: 1px solid #2c2c2c; }
+.td-c-id { color: #93c5fd; font-variant-numeric: tabular-nums; }
+.td-none { color: #4b5563; }
 .cs-foot { color: #888; font-size: 0.78rem; margin-top: 1rem; }
 
 /* Print: white sheet, hide chrome, keep layer colours. */
@@ -384,9 +394,13 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   .cs-refs { gap: 0.9rem; }
   .combo-legend { background: #fff; border: 1px solid #999; padding: 0.5rem 0.7rem; }
   .combo-row { padding: 0.12rem 0.3rem; font-size: 0.74rem; }
-  .combo-row, .combo-row .combo-output, .td-act { color: #000; }
+  .combo-row, .combo-row .combo-output { color: #000; }
   .combo-legend-title { color: #333; }
-  .td-k, .td-sep { color: #555; }
+  .td-table td, .td-c-id { color: #000; }
+  .td-table th { color: #333; border-bottom-color: #999; }
+  .td-table tbody tr + tr td { border-top-color: #ccc; }
+  .td-none { color: #777; }
+  .cs-li-act { color: #444; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
