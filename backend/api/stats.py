@@ -143,19 +143,29 @@ def get_stats(
     # cap to keep the response bounded if someone passes an empty-ish filter
     # against a huge events table.
     effective_n = 10000 if key else top
-    rows = repo.top_n(app=app, kind=kind, n=effective_n, key_filter=key)
+    # Bare letter presses (a-z, no modifier) are pure typing noise on the
+    # single-key list — exclude them so it surfaces functional keys. Combos
+    # (Cmd+A etc.) are unaffected since they carry modifiers.
+    rows = repo.top_n(
+        app=app, kind=kind, n=effective_n, key_filter=key,
+        exclude_single_letters=True,
+    )
 
     # Total within the same scope (kind+app+key filter) drives the % column.
     # Applying the key filter here too means pct represents "share of the
     # filtered scope" — e.g. with key="cmd", Cmd+C's pct is its share of
     # all Cmd combos, not of all events overall (which would be unhelpfully
     # small numbers that don't add to anything meaningful).
+    # Exclude bare letters from the denominator too, matching the rows above,
+    # so percentages are a share of what's actually listed.
+    no_letters = "NOT (modifiers = '' AND key GLOB '[a-z]')"
     if kind == "single":
-        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers = ''", key=key)
+        where = f"modifiers = '' AND {no_letters}"
     elif kind == "mod":
-        scope_total = _scoped_total(DB_PATH, app=app, where="modifiers != ''", key=key)
+        where = "modifiers != ''"
     else:
-        scope_total = _scoped_total(DB_PATH, app=app, where="1=1", key=key)
+        where = no_letters
+    scope_total = _scoped_total(DB_PATH, app=app, where=where, key=key)
 
     return {
         "scope": {"app": app, "kind": kind, "top": top, "key": key},
