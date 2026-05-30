@@ -39,7 +39,12 @@
 
     const top = r.label_top ?? "";
     const bot = r.label_bottom ?? "";
-    const labelTopHtml = top === "" ? "&nbsp;" : escapeHtml(top);
+    // User-given name (if any) replaces the keycode on the cell; the original
+    // resolved output still shows in the hover tooltip (key-tooltip.js).
+    const alias = window.keyAliases ? window.keyAliases.get(key.raw) : null;
+    if (alias) classes.push("has-alias");
+    const topText = alias || top;
+    const labelTopHtml = topText === "" ? "&nbsp;" : escapeHtml(topText);
     // Macro override wins over the keycode's own label_bottom — the macro
     // identity (e.g. "macro 3") is more useful than the underlying raw,
     // which for a macro slot is just "MACRO3" and provides no extra info.

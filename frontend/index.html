@@ -14,6 +14,7 @@
       <button data-view="cheatsheet">Cheatsheet</button>
       <button data-view="interactive">Interactive</button>
       <button data-view="stats">Stats</button>
+      <button data-view="keyname">Key Name Map</button>
     </nav>
     <div class="layout-source">
       <button id="layout-upload-btn" type="button" title="Replace the active .vil with one from disk">
@@ -40,9 +41,13 @@
     <section id="view-stats" class="view hidden">
       <p class="placeholder">loading stats…</p>
     </section>
+    <section id="view-keyname" class="view hidden">
+      <p class="placeholder">loading key name map…</p>
+    </section>
   </main>
 
   <script src="keycode-format.js"></script>
+  <script src="aliases.js"></script>
   <script src="grid-render.js"></script>
   <script src="key-tooltip.js"></script>
   <script src="static-viewer.js"></script>
@@ -50,6 +55,7 @@
   <script src="heatmap.js"></script>
   <script src="stats.js"></script>
   <script src="interactive.js"></script>
+  <script src="keyname-map.js"></script>
   <script src="vial-upload.js"></script>
   <script src="app.js"></script>
 </body>

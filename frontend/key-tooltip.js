@@ -195,8 +195,15 @@
   }
 
   function wrap(kind, header, body, raw, combo = "") {
+    const alias = window.keyAliases ? window.keyAliases.get(raw) : null;
+    const nameRow = alias
+      ? `<div class="kt-section"><div class="kt-row">
+           <span class="kt-label">名稱</span><span><b>${escape(alias)}</b></span></div></div>
+         <div class="kt-divider"></div>`
+      : "";
     return `
       <div class="kt-header kt-kind-${escape(kind)}">${escape(header)}</div>
+      ${nameRow}
       <div class="kt-section">${body}</div>
       ${combo ? `<div class="kt-divider"></div><div class="kt-section">${combo}</div>` : ""}
       ${raw ? `<div class="kt-divider"></div>

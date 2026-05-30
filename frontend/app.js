@@ -13,4 +13,15 @@
       views.forEach((v) => v.classList.toggle("hidden", v.id !== `view-${target}`));
     });
   });
+
+  // Deep-link support for external launchers (e.g. the Hammerspoon HUD):
+  //   ?view=cheatsheet   → open straight to that tab
+  //   ?embed=1           → hide the app chrome (header/nav) for an overlay
+  const params = new URLSearchParams(location.search);
+  const wantView = params.get("view");
+  if (wantView) {
+    const btn = document.querySelector(`nav button[data-view="${wantView}"]`);
+    if (btn) btn.click();
+  }
+  if (params.get("embed") === "1") document.body.classList.add("embed");
 })();

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 
+from .api.aliases import router as aliases_router
 from .api.helper import router as helper_router
 from .api.layout import router as layout_router
 from .api.live import router as live_router
@@ -30,6 +31,7 @@ app.include_router(layout_router)
 app.include_router(stats_router)
 app.include_router(live_router)
 app.include_router(helper_router)
+app.include_router(aliases_router)
 
 
 @app.get("/health")

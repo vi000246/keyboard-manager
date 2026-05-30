@@ -89,6 +89,22 @@ def _load(path: Path) -> dict:
         d["output_label"] = _label_of(c.output)
         combo_json.append(d)
 
+    # Tap-dance entries store raw keycodes for each branch; resolve them the
+    # same way so the UI can show "Esc / hold Gui / 2-tap :" instead of TDn.
+    NONE_CODES = {"KC_NO", "KC_TRNS", ""}
+
+    def _branch_label(raw: str) -> str | None:
+        return None if raw in NONE_CODES else _label_of(raw)
+
+    tap_dance_json: list[dict] = []
+    for td in layout.tap_dance:
+        d = asdict(td)
+        d["tap_label"] = _branch_label(td.tap)
+        d["hold_label"] = _branch_label(td.hold)
+        d["double_tap_label"] = _branch_label(td.double_tap)
+        d["tap_hold_label"] = _branch_label(td.tap_hold)
+        tap_dance_json.append(d)
+
     # Only surface macros that actually have at least one action — empty
     # slots clutter the frontend's lookup table without adding information.
     # `raw` is the keycode that, when placed in a layer cell, fires this
@@ -107,7 +123,7 @@ def _load(path: Path) -> dict:
         "vial_protocol": layout.vial_protocol,
         "uid": layout.uid,
         "layers": layers_json,
-        "tap_dance": [asdict(td) for td in layout.tap_dance],
+        "tap_dance": tap_dance_json,
         "combo": combo_json,
         "macro": macro_json,
     }

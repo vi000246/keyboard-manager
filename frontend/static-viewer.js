@@ -43,6 +43,7 @@
 
   async function show() {
     const layout = await ensureLayout();
+    if (window.keyAliases) await window.keyAliases.ensure();
     if (!layout) return;
 
     const usedLayers = layout.layers.filter(isLayerUsed);
@@ -88,5 +89,7 @@
     layoutCache = null;
     show();
   }
+  // Re-render when a key name is added/edited elsewhere.
+  if (window.keyAliases) window.keyAliases.onChange(show);
   window.staticViewer = { show, refresh, getLayout: () => layoutCache };
 })();

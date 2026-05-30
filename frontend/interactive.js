@@ -178,18 +178,19 @@
   }
 
   /**
-   * If any held key is a layer-tap on BASE, the displayed layer follows its
-   * hold target. Last-held wins on conflict (rare in practice).
-   * Virtual mouse-clicks (virtualHeld) are folded in here too.
+   * The previewed layer is driven ONLY by virtual mouse-click holds.
+   *
+   * We deliberately do NOT switch layers from real key events: QMK swallows a
+   * layer-tap's hold (no macOS event fires while it's held), so an observed
+   * key event for a layer-tap key always means it was *tapped* — its tap
+   * output was emitted, the layer was not entered. Inferring a layer from such
+   * an event mis-fires whenever that same output arrives another way — e.g. a
+   * C+V combo emitting Space would otherwise "hold" Space and jump to L2.
+   * (Held keys still paint `.pressed` and list in the chips; they just don't
+   * move the layer.)
    */
   function computeActiveLayer() {
     let target = 0;
-    for (const held of heldKeys) {
-      const slot = findOnBaseLayer(held);
-      if (!slot || slot.resolved.expanded_kind !== "layer-tap") continue;
-      const m = (slot.resolved.label_bottom || "").match(/L(\d+)/);
-      if (m) target = parseInt(m[1], 10);
-    }
     for (const pos of virtualHeld) {
       const slot = slotAt(pos);
       if (!slot) continue;
@@ -279,6 +280,42 @@
    * rendering — so holding Tab on LT1 will glow even when the grid has
    * switched to NAV (where that position is TRN).
    */
+  /**
+   * When a combo with a MODIFIED output fires (e.g. C+V → Ctrl+Space), QMK
+   * emits the modifier(s) + key, so heldKeys looks like {ctrl, space}. That is
+   * the combo OUTPUT, not two separate physical presses — so we attribute it to
+   * the combo instead of reverse-mapping ctrl/space onto unrelated base keys
+   * (the Space cell + whatever holds Ctrl). Returns the matching combo or null.
+   *
+   * Scoped to modified outputs only: a plain single-key combo output (Esc, "{")
+   * is genuinely indistinguishable from tapping that key, so we leave those to
+   * the existing label-based highlight.
+   */
+  function comboFromHeldChord() {
+    if (!layout || !Array.isArray(layout.combo) || heldKeys.size < 2) return null;
+    const mods = new Set();
+    const bases = [];
+    for (const h of heldKeys) {
+      const m = MOD_NAMES[h.toLowerCase()];
+      if (m) mods.add(m);
+      else bases.push(labelFor(h) || h);
+    }
+    if (mods.size === 0 || bases.length !== 1) return null;
+    const baseLabel = bases[0];
+    for (const c of layout.combo) {
+      if (!Array.isArray(c.triggers) || c.triggers.length === 0) continue;
+      const parts = (c.output_label || "").split("+");
+      if (parts.length < 2) continue; // output has no modifier
+      if (parts[parts.length - 1] !== baseLabel) continue;
+      const cMods = new Set(parts.slice(0, -1));
+      if (cMods.size !== mods.size) continue;
+      let ok = true;
+      for (const m of cMods) if (!mods.has(m)) { ok = false; break; }
+      if (ok) return c;
+    }
+    return null;
+  }
+
   function applyPressed(gridRoot) {
     // Clear BOTH classes so the amber virtual marker disappears on release.
     gridRoot.querySelectorAll(".key.pressed, .key.pressed-virtual").forEach((k) => {
@@ -289,8 +326,12 @@
     // the loop below to paint them.
     if (heldKeys.size === 0 && virtualHeld.size === 0) return;
 
+    // If the held keys are actually a combo's modified output, don't paint the
+    // reverse-mapped base cells — the combo highlight lights the trigger keys.
+    const chordCombo = comboFromHeldChord();
+
     const lit = new Set();
-    for (const held of heldKeys) {
+    for (const held of chordCombo ? [] : heldKeys) {
       const slots = findAllBaseSlots(held);
       for (const s of slots) {
         const cellKey = `${s.row}:${s.col}`;
@@ -431,13 +472,18 @@
       const l = labelFor(h);
       if (l) heldLabels.add(l);
     }
+    // Combos whose output carries a modifier (e.g. Ctrl+Space) arrive as
+    // {ctrl, space} — not a single "Ctrl+Space" label — so match them by chord.
+    const chordCombo = comboFromHeldChord();
 
     for (const c of layout.combo) {
       if (!Array.isArray(c.triggers) || c.triggers.length === 0) continue;
       const triggerLabels = c.trigger_labels || c.triggers;
       const outputLabel = c.output_label || c.output;
       const triggerHit = triggerLabels.some((l) => heldLabels.has(l));
-      const outputHit = outputLabel && heldLabels.has(outputLabel);
+      const outputHit =
+        (outputLabel && heldLabels.has(outputLabel)) ||
+        (chordCombo && chordCombo.index === c.index);
       if (!triggerHit && !outputHit) continue;
 
       const row = root.querySelector(`.combo-row[data-combo-index="${c.index}"]`);
@@ -512,12 +558,15 @@
 
   async function init() {
     await ensureLayout();
+    if (window.keyAliases) await window.keyAliases.ensure();
     render();
     connect();
     if (window.keyTooltip) {
       window.keyTooltip.setupKeyTooltips(root, () => layout);
     }
     wireClickToSimulate();
+    // Re-render when a key name is added/edited on the Key Name Map page.
+    if (window.keyAliases) window.keyAliases.onChange(render);
   }
 
   /**

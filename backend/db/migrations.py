@@ -39,6 +39,14 @@ CREATE TABLE IF NOT EXISTS snapshots (
   source TEXT    NOT NULL,
   notes  TEXT
 );
+
+-- User-defined names for keycodes / actions. `raw` is the keycode string as it
+-- appears in /api/layout (e.g. "LALT(KC_F)", "TD(4)", or a combo output). The
+-- name ("全螢幕") is shown across the viewer pages to replace/annotate the code.
+CREATE TABLE IF NOT EXISTS key_aliases (
+  raw  TEXT PRIMARY KEY,
+  name TEXT NOT NULL
+);
 """
 
 

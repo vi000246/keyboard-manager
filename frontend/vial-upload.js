@@ -37,6 +37,7 @@
     if (window.cheatsheet?.refresh) window.cheatsheet.refresh();
     if (window.statsDashboard?.refresh) window.statsDashboard.refresh();
     if (window.interactiveSim?.refresh) window.interactiveSim.refresh();
+    if (window.keynameMap?.refresh) window.keynameMap.refresh();
   }
 
   uploadBtn.addEventListener("click", () => fileInput.click());

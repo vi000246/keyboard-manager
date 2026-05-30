@@ -164,3 +164,29 @@ class StatsRepo(_BaseRepo):
                     "SELECT COALESCE(SUM(count), 0) FROM events"
                 ).fetchone()
             return row[0] or 0
+
+
+class AliasRepo(_BaseRepo):
+    """User-defined names for keycodes/actions (key_aliases table)."""
+
+    def all(self) -> dict[str, str]:
+        with self._conn() as c:
+            rows = c.execute("SELECT raw, name FROM key_aliases").fetchall()
+            return {r["raw"]: r["name"] for r in rows}
+
+    def set(self, raw: str, name: str) -> None:
+        """Upsert a name; an empty/blank name removes the alias."""
+        name = (name or "").strip()
+        with self._conn() as c:
+            if not name:
+                c.execute("DELETE FROM key_aliases WHERE raw=?", (raw,))
+            else:
+                c.execute(
+                    "INSERT INTO key_aliases(raw, name) VALUES(?,?) "
+                    "ON CONFLICT(raw) DO UPDATE SET name=excluded.name",
+                    (raw, name),
+                )
+
+    def delete(self, raw: str) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM key_aliases WHERE raw=?", (raw,))

@@ -344,7 +344,18 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   background: #4fb8c9;
 }
 
-.cs-combos { max-width: none; }
+/* Combos + Tap Dance reference boxes, side by side. */
+.cs-refs { display: flex; gap: 1.2rem; align-items: flex-start; flex-wrap: wrap; }
+.cs-ref-box { flex: 1 1 22rem; max-width: none; margin-top: 0; }
+.td-act { color: #cbd5e1; }
+.td-k {
+  color: #94a3b8;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-right: 0.25rem;
+}
+.td-sep { color: #4b5563; margin: 0 0.45rem; }
 .cs-foot { color: #888; font-size: 0.78rem; margin-top: 1rem; }
 
 /* Print: white sheet, hide chrome, keep layer colours. */
@@ -355,21 +366,69 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   main { padding: 0; max-width: none; }
   #view-cheatsheet.hidden { display: block !important; }
   .view:not(#view-cheatsheet) { display: none !important; }
-  .cs-board { flex-wrap: nowrap; gap: 1.2rem; }
-  .cs-board .row { grid-template-columns: repeat(7, 3.6rem); gap: 0.25rem; }
+  /* Shrink to fit one A4 landscape sheet. */
+  html, body { font-size: 13px; }
+  .cs-board { flex-wrap: nowrap; gap: 0.9rem; margin-bottom: 0.7rem; }
+  .cs-board .half { gap: 0.22rem; }
+  .cs-board .row { grid-template-columns: repeat(7, 3.15rem); gap: 0.22rem; }
   .cs-key {
-    height: 4.2rem;
+    height: 3.7rem;
     background: #fff;
     border: 1px solid #333;
+    padding: 0.12rem 0.18rem 0.1rem;
   }
-  .cs-base { color: #000; }
-  .cs-base { color: #000; }
-  .cs-legend { color: #000; }
-  .combo-legend { background: #fff; border: 1px solid #999; }
-  .combo-row, .combo-row .combo-output { color: #000; }
+  .cs-base { color: #000; font-size: 0.88rem; }
+  .cs-ov { font-size: 0.56rem; }
+  .cs-hold { font-size: 0.5rem; }
+  .cs-legend { color: #000; margin-bottom: 0.6rem; }
+  .cs-refs { gap: 0.9rem; }
+  .combo-legend { background: #fff; border: 1px solid #999; padding: 0.5rem 0.7rem; }
+  .combo-row { padding: 0.12rem 0.3rem; font-size: 0.74rem; }
+  .combo-row, .combo-row .combo-output, .td-act { color: #000; }
   .combo-legend-title { color: #333; }
+  .td-k, .td-sep { color: #555; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Embed mode (Hammerspoon HUD: ?embed=1) — hide chrome, tighten ───── */
+body.embed header { display: none; }
+body.embed main { padding: 10px 14px; max-width: none; }
+body.embed .cs-toolbar,
+body.embed .cs-foot { display: none; }
+body.embed .cs-legend { margin-top: 0; }
+
+/* ── Key Name Map editor ─────────────────────────────────────────────── */
+
+.kn-toolbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+#kn-search {
+  background: #222; color: #e5e5e5; border: 1px solid #444;
+  padding: 0.4rem 0.7rem; border-radius: 4px; font: inherit; min-width: 16rem;
+}
+#kn-search::placeholder { color: #666; }
+.kn-hint { color: #888; font-size: 0.82rem; }
+
+.kn-table { border-collapse: collapse; width: 100%; max-width: 60rem; font-size: 0.9rem; }
+.kn-table th, .kn-table td {
+  padding: 0.4rem 0.8rem; text-align: left; border-bottom: 1px solid #2c2c2c;
+}
+.kn-table th {
+  background: #1a1a1a; color: #888; font-weight: 500; text-transform: uppercase;
+  font-size: 0.72rem; letter-spacing: 0.05em; position: sticky; top: 0;
+}
+.kn-action { font-weight: 600; color: #e5e5e5; }
+.kn-where { color: #8aa; font-size: 0.8rem; }
+.kn-name { white-space: nowrap; }
+.kn-name input {
+  background: #1c1c1c; color: #e5e5e5; border: 1px solid #3a3a3a;
+  padding: 0.3rem 0.6rem; border-radius: 4px; font: inherit; width: 16rem;
+}
+.kn-name input:focus { border-color: #6a8fbe; outline: none; }
+.kn-saved { color: #4ade80; font-size: 0.75rem; margin-left: 0.5rem; }
+
+/* A named key gets a subtle accent in the Static / Interactive grids so it's
+   clear the label shown is a custom name (full detail is in the tooltip). */
+.key.has-alias { border-color: #c08a3a; }
+.key.has-alias .label-top { color: #ffcf8a; }
 
 /* ── Stats dashboard ────────────────────────────────────────────────── */
 
