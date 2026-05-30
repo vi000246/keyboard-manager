@@ -430,6 +430,9 @@ body.embed .cs-legend { margin-top: 0; }
 .key.has-alias { border-color: #c08a3a; }
 .key.has-alias .label-top { color: #ffcf8a; }
 
+/* Custom name shown beside a shortcut's keycode in the Stats table. */
+.stat-alias { color: #ffcf8a; font-size: 0.85rem; margin-left: 0.45rem; }
+
 /* ── Stats dashboard ────────────────────────────────────────────────── */
 
 .stats-toolbar {

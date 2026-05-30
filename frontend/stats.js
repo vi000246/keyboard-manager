@@ -183,12 +183,20 @@
     const rows = stats.rows
       .map((r, i) => {
         const mods = r.modifiers ? `${r.modifiers}+` : "";
+        // User-defined name for this shortcut, set in the Key Name Map and
+        // keyed identically via keyAliases.statKey (see aliases.js).
+        const name = window.keyAliases
+          ? window.keyAliases.get(window.keyAliases.statKey(r.key, r.modifiers))
+          : null;
+        const nameHtml = name
+          ? ` <span class="stat-alias">${escapeHtml(name)}</span>`
+          : "";
         return `
           <tr data-key="${escapeAttr(r.key)}" data-mods="${escapeAttr(r.modifiers)}">
             <td class="rank">${i + 1}</td>
             <td class="count">${r.count.toLocaleString()}</td>
             <td class="pct">${r.pct.toFixed(2)}%</td>
-            <td><code>${escapeHtml(mods + r.key)}</code></td>
+            <td><code>${escapeHtml(mods + r.key)}</code>${nameHtml}</td>
           </tr>`;
       })
       .join("");
@@ -212,6 +220,8 @@
       loadStats(app, kind, keyFilter),
       window.heatmap ? window.heatmap.loadHeatmap(app) : Promise.resolve(null),
       loadLayout(),
+      // Names are looked up synchronously while building the table rows.
+      window.keyAliases ? window.keyAliases.ensure() : Promise.resolve(),
     ]);
     lastStats = stats;
     lastHeatmap = heatmap;

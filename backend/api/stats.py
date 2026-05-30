@@ -94,6 +94,38 @@ def get_heatmap(app: str | None = None):
     }
 
 
+@router.get("/api/stats/nameable")
+def get_nameable_keys():
+    """Distinct combos + non-typing singles across ALL apps, for the Key Name Map.
+
+    The Key Name Map's layout-derived list can't cover shortcuts you press that
+    aren't keys on the .vil (e.g. `alt+r`, a media play/pause). Those live only
+    in the recorded `events` table, so we surface every distinct (key, modifiers)
+    here — minus plain-typing singles (letters/digits/space/etc.) so the list
+    stays a "shortcut surface". Each entry's `display` matches the Stats table
+    rendering so an alias keyed by it (`stat:<display>`) lines up on both pages.
+    """
+    from ..main import DB_PATH
+
+    rows = filter_typing_singles(
+        StatsRepo(DB_PATH).top_n(app=None, kind="all", n=10000)
+    )
+    out = []
+    for r in rows:
+        mods = r["modifiers"] or ""
+        display = (f"{mods}+" if mods else "") + r["key"]
+        out.append(
+            {
+                "key": r["key"],
+                "modifiers": mods,
+                "total": r["total"],
+                "display": display,
+            }
+        )
+    out.sort(key=lambda e: e["total"], reverse=True)
+    return out
+
+
 @router.get("/api/stats")
 def get_stats(
     app: str | None = None,

@@ -43,6 +43,24 @@
     return layoutCache;
   }
 
+  // Shortcuts you actually pressed (from the Stats events table) that aren't
+  // layout keys — e.g. alt+r, a media play/pause. Keyed by `stat:<display>`
+  // so the name surfaces back on the Stats page.
+  async function fetchStatEntries() {
+    try {
+      const r = await fetch("/api/stats/nameable");
+      if (!r.ok) return [];
+      const rows = await r.json();
+      return rows.map((s) => ({
+        raw: window.keyAliases.statKey(s.key, s.modifiers),
+        label: s.display,
+        where: new Set([`stats ·${s.total.toLocaleString()}`]),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   function collect(layout) {
     const byRaw = new Map(); // raw -> {raw, label, where:Set}
     const add = (raw, label, where) => {
@@ -96,19 +114,25 @@
   }
 
   async function show() {
-    let layout;
+    let layout, statEntries;
     try {
-      [layout] = await Promise.all([ensureLayout(), window.keyAliases.ensure()]);
+      [layout, , statEntries] = await Promise.all([
+        ensureLayout(),
+        window.keyAliases.ensure(),
+        fetchStatEntries(),
+      ]);
     } catch (e) {
       container.innerHTML = `<p class="error">load failed: ${e.message}</p>`;
       return;
     }
-    entries = collect(layout);
+    // Layout-derived actions first (sorted by label), then the shortcuts that
+    // exist only in your recorded stats (sorted by how often you pressed them).
+    entries = collect(layout).concat(statEntries || []);
 
     container.innerHTML =
       `<div class="kn-toolbar">` +
       `<input id="kn-search" type="search" placeholder="搜尋動作 / 名稱…" />` +
-      `<span class="kn-hint">填入名稱即自動儲存；清空＝刪除。名稱會顯示在 Cheatsheet（取代按鍵）、Static Viewer、Interactive。</span>` +
+      `<span class="kn-hint">填入名稱即自動儲存；清空＝刪除。名稱會顯示在 Cheatsheet（取代按鍵）、Static Viewer、Interactive；「出現在 stats」的項目（如 alt+r）會顯示在 Stats 頁。</span>` +
       `</div>` +
       `<table class="kn-table"><thead><tr>` +
       `<th>動作</th><th>出現在</th><th>名稱 (describe)</th>` +

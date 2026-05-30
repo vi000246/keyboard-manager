@@ -35,6 +35,16 @@
     return map;
   }
 
+  // Canonical alias key for a Stats-page row (a recorded keystroke, NOT a
+  // layout keycode). `modifiers` is the helper's "+"-joined canonical string
+  // (e.g. "alt" or "cmd+shift"). The `stat:` prefix namespaces these away from
+  // layout raws (KC_*, LALT(...)) so the two never collide. Both the Stats
+  // table and the Key Name Map build the key this way so a name lines up.
+  function statKey(key, modifiers) {
+    const mods = modifiers ? `${modifiers}+` : "";
+    return `stat:${mods}${key}`;
+  }
+
   // Persist one name (blank deletes), update the local map, and notify views.
   async function set(raw, name) {
     const r = await fetch("/api/aliases", {
@@ -64,5 +74,5 @@
     }
   }
 
-  window.keyAliases = { ensure, reload, get, all, set, onChange };
+  window.keyAliases = { ensure, reload, get, all, set, statKey, onChange };
 })();
