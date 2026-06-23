@@ -134,7 +134,7 @@
   // ─── tooltip HTML by kind ───────────────────────────────────────────
 
   // Layer-index → friendly name. Mirrors the dropdown in index.html.
-  const LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
+  const LAYER_NAMES = ["BASE", "NAV", "NUM", "SYM", "FUNC", ""];
 
   // Plain keycodes whose system behavior is worth describing. Anything not
   // in here gets just "Output: <label>".

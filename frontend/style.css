@@ -62,8 +62,11 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 /* ── Keyboard grid ─────────────────────────────────────────────────── */
 
 .keyboard {
+  /* Per-key column width; rows set grid-template-columns: repeat(N, var(--key-w))
+     with N = number of *used* columns, so empty columns simply aren't rendered. */
+  --key-w: 4.8rem;
   display: flex;
-  gap: 2rem;
+  gap: 1rem;
   justify-content: center;
   align-items: flex-start;
   flex-wrap: wrap;
@@ -77,8 +80,8 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 
 .row {
   display: grid;
-  /* 7 columns: outer/pinky/ring/mid/index/inner_or_thumb + 1 extra */
-  grid-template-columns: repeat(7, 4.2rem);
+  /* Fallback; JS overrides per-row with only the used column count. */
+  grid-template-columns: repeat(7, var(--key-w));
   gap: 0.35rem;
 }
 
@@ -89,6 +92,7 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   border: 1px solid #3a3a3a;
   border-radius: 6px;
   background: #232323;
+  color: #f0f0f0;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -273,11 +277,89 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 /* How to enter a layer, e.g. "長按 LT1（Tab／Del）" beside its colour chip. */
 .cs-li-act { color: #9aa4b2; font-size: 0.76rem; }
 
+/* Layer selector buttons — one per used layer + "全部疊圖". */
+.cs-layer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.cs-layer-btn {
+  background: #232323;
+  color: #ddd;
+  border: 1px solid var(--c, #555);
+  border-left: 4px solid var(--c, #555);
+  padding: 0.35rem 0.85rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.cs-layer-btn:hover { background: #2c2c2c; }
+.cs-layer-btn.active {
+  background: var(--c, #555);
+  /* layer colours are light tones now → dark text reads better when filled */
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
 .cs-board { margin-bottom: 1.5rem; }
+/* Wider keys than the static viewer so the stacked layer lines fit; the JS
+   auto-fit then shrinks any still-too-long string to show it in full. */
+.cs-board { --key-w: 5rem; }
+
+/* Single-layer mode: only the chosen layer's keys, large + white + centred. */
+.cs-single-cap {
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.6rem;
+}
+.cs-single-board { border-top: 2px solid var(--layer-c, #555); padding-top: 0.6rem; }
+.cs-key.cs-single {
+  justify-content: center;
+  align-items: center;
+  padding: 0.2rem;
+}
+.cs-single-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  height: 100%;
+  width: 100%;
+}
+.cs-single-main {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.35rem;
+  line-height: 1.05;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.cs-single-sub {
+  color: #f061d4;
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+/* Falls through to BASE on this layer — show the base legend, dimmed. */
+.cs-key.cs-single.trn { opacity: 0.32; }
+.cs-key.cs-single.trn .cs-single-main {
+  color: #aab;
+  font-weight: 500;
+  font-size: 1rem;
+}
 
 .cs-key {
   position: relative;
-  height: 4.6rem;
+  /* Grow to fit however many layer lines a key carries (up to ~5–6) instead
+     of clipping at a fixed height; min-height keeps sparse keys uniform. */
+  min-height: 5.6rem;
+  height: auto;
   border: 1px solid #3a3a3a;
   border-radius: 6px;
   background: #232323;
@@ -308,6 +390,10 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Constrain inside the key so the JS auto-fit can detect overflow (a flex
+     child is otherwise free to grow past the key width). */
+  max-width: 100%;
+  min-width: 0;
 }
 .cs-hold {
   font-size: 0.55rem;
@@ -329,11 +415,17 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   font-size: 0.6rem;
   font-weight: 700;
   line-height: 1.15;
+  /* Fixed slot height so every layer occupies the same row across all keys,
+     even where a layer is transparent (blank slot) — keeps the colour rows
+     aligned for easy column-by-column comparison. */
+  min-height: 0.82rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* Transparent-on-this-layer placeholder: reserves the row, shows nothing. */
+.cs-ov-empty { min-height: 0.82rem; }
 
 .cs-key.has-combo::after {
   content: "";
@@ -372,17 +464,18 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 @media print {
   @page { size: landscape; margin: 10mm; }
   body { background: #fff; color: #000; }
-  header, .cs-toolbar, .cs-hint, .cs-foot { display: none !important; }
+  header, .cs-toolbar, .cs-hint, .cs-foot, .cs-layer-bar { display: none !important; }
   main { padding: 0; max-width: none; }
   #view-cheatsheet.hidden { display: block !important; }
   .view:not(#view-cheatsheet) { display: none !important; }
   /* Shrink to fit one A4 landscape sheet. */
   html, body { font-size: 13px; }
-  .cs-board { flex-wrap: nowrap; gap: 0.9rem; margin-bottom: 0.7rem; }
+  .cs-board { --key-w: 3.15rem; flex-wrap: nowrap; gap: 0.9rem; margin-bottom: 0.7rem; }
   .cs-board .half { gap: 0.22rem; }
-  .cs-board .row { grid-template-columns: repeat(7, 3.15rem); gap: 0.22rem; }
+  .cs-board .row { gap: 0.22rem; }
   .cs-key {
-    height: 3.7rem;
+    min-height: 3.7rem;
+    height: auto;
     background: #fff;
     border: 1px solid #333;
     padding: 0.12rem 0.18rem 0.1rem;
@@ -390,6 +483,10 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
   .cs-base { color: #000; font-size: 0.88rem; }
   .cs-ov { font-size: 0.56rem; }
   .cs-hold { font-size: 0.5rem; }
+  /* Single-layer mode prints black-on-white too. */
+  .cs-single-cap { color: #000 !important; }
+  .cs-single-main { color: #000 !important; font-size: 1.05rem; }
+  .cs-key.cs-single.trn .cs-single-main { color: #777 !important; }
   .cs-legend { color: #000; margin-bottom: 0.6rem; }
   .cs-refs { gap: 0.9rem; }
   .combo-legend { background: #fff; border: 1px solid #999; padding: 0.5rem 0.7rem; }

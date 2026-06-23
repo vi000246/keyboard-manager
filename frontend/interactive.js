@@ -233,7 +233,7 @@
 
   // ── Layer-name lookup ──────────────────────────────────────────────
   // Friendly layer-index → name, for the status bar.
-  const _LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
+  const _LAYER_NAMES = ["BASE", "NAV", "NUM", "SYM", "FUNC", ""];
   const layerName = (i) => _LAYER_NAMES[i] || "";
 
   function buildHeldChips() {

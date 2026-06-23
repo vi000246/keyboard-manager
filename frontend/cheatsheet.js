@@ -12,19 +12,24 @@
   if (!container) return;
 
   let layoutCache = null;
+  // null = combined overlay (all layers on one board); a number = show ONLY
+  // that layer's keys (single-layer mode, toggled by the layer buttons).
+  let selectedLayer = null;
 
   // Index-aligned with the .vil layer order. Keep in sync with
   // static-viewer.js LAYER_NAMES.
-  const LAYER_NAMES = ["BASE", "NAV", "SYM", "FN", "MEDIA", "ADJ"];
+  const LAYER_NAMES = ["BASE", "NAV", "NUM", "SYM", "FUNC", "ADJ"];
+  // Light tones — the board background is dark (#232323 keys on #1a1a1a), so
+  // every layer colour must read as a light foreground.
   const LAYER_COLORS = [
-    "#111111", // 0 BASE
-    "#2454d6", // 1 NAV   dark blue
-    "#9333ea", // 2 SYM   purple
-    "#d11f1f", // 3 FN    red
-    "#e6791b", // 4 MEDIA orange
-    "#0c8fb0", // 5 ADJ   teal
+    "#dcdcdc", // 0 BASE  light grey
+    "#6ea8ff", // 1 NAV   light blue
+    "#c79cff", // 2 SYM   light purple
+    "#ff8a8a", // 3 FN    light red
+    "#ffb15c", // 4 MEDIA light orange
+    "#5fd3e6", // 5 ADJ   light teal
   ];
-  const HOLD_COLOR = "#c026a8"; // base mod-tap / layer-tap hold action
+  const HOLD_COLOR = "#f061d4"; // base mod-tap / layer-tap hold action (light magenta)
 
   function isLayerUsed(layer) {
     for (const row of layer.rows) {
@@ -75,22 +80,30 @@
     let mainHtml = `<span class="cs-base">${escapeHtml(baseText || "&nbsp;")}</span>`;
     if (bot) mainHtml += `<span class="cs-hold">${escapeHtml(bot)}</span>`;
 
-    // Below: one coloured line per OTHER used layer. Lines (not corners) so
-    // long labels like "Cmd+KC_KP_PLUS" ellipsis-truncate instead of colliding.
+    // Below: one coloured line per OTHER used layer, in a FIXED slot per layer
+    // so the same layer always sits on the same row across every key (blank
+    // where the layer is transparent) — makes columns easy to compare. Lines
+    // ellipsis-truncate so long labels like "Cmd+KC_KP_PLUS" don't collide.
     const lines = [];
     for (const idx of overlayIdx) {
       const k = byIndex[idx].rows[r].keys[c];
-      if (!isLiveSlot(k)) continue;
-      const lr = k.resolved || {};
-      let txt = lr.label_top ?? "";
-      if (lr.label_bottom) txt += "/" + lr.label_bottom;
-      txt = aliasOr(k.raw, txt); // named action → show only the name
-      if (!txt) continue;
-      const name = LAYER_NAMES[idx] || `L${idx}`;
-      lines.push(
-        `<span class="cs-ov" style="color:${LAYER_COLORS[idx] || "#555"}" ` +
-          `title="${escapeHtml(name + ": " + txt)}">${escapeHtml(txt)}</span>`
-      );
+      let txt = "";
+      if (isLiveSlot(k)) {
+        const lr = k.resolved || {};
+        txt = lr.label_top ?? "";
+        if (lr.label_bottom) txt += "/" + lr.label_bottom;
+        txt = aliasOr(k.raw, txt); // named action → show only the name
+      }
+      if (txt) {
+        const name = LAYER_NAMES[idx] || `L${idx}`;
+        lines.push(
+          `<span class="cs-ov" style="color:${LAYER_COLORS[idx] || "#555"}" ` +
+            `title="${escapeHtml(name + ": " + txt)}">${escapeHtml(txt)}</span>`
+        );
+      } else {
+        // Reserve this layer's row even when transparent, to keep alignment.
+        lines.push(`<span class="cs-ov cs-ov-empty" aria-hidden="true"></span>`);
+      }
     }
 
     const cls = ["cs-key", `kind-${kind}`];
@@ -120,19 +133,19 @@
       }
     }
 
-    const renderRow = (r) =>
-      `<div class="row row-${base.rows[r].row}">` +
-      base.rows[r].keys
-        .map((_, c) => cell(byIndex, base, overlayIdx, comboTriggers, r, c))
+    // Hide fully-empty rows/columns (shared with the static viewer).
+    const geo = window.gridRender.usedGeometry(layout);
+    const renderRow = (cols, r) =>
+      `<div class="row row-${base.rows[r].row}" style="grid-template-columns: repeat(${cols.length}, var(--key-w))">` +
+      cols
+        .map((c) => cell(byIndex, base, overlayIdx, comboTriggers, r, c))
         .join("") +
       `</div>`;
 
-    const leftRows = [0, 1, 2, 3, 4];
-    const rightRows = [5, 6, 7, 8, 9];
     const board =
       `<div class="keyboard cs-board">` +
-      `<div class="half half-left">${leftRows.map(renderRow).join("")}</div>` +
-      `<div class="half half-right">${rightRows.map(renderRow).join("")}</div>` +
+      `<div class="half half-left">${geo.left.rows.map((r) => renderRow(geo.left.cols, r)).join("")}</div>` +
+      `<div class="half half-right">${geo.right.rows.map((r) => renderRow(geo.right.cols, r)).join("")}</div>` +
       `</div>`;
 
     return { board, overlayIdx };
@@ -258,6 +271,152 @@
     );
   }
 
+  // Layer selector: a button per USED layer plus "全部疊圖" (combined overlay).
+  // Clicking one flips selectedLayer and re-renders just the board area.
+  function renderLayerBar(usedIdx) {
+    const btn = (val, label, color) =>
+      `<button type="button" class="cs-layer-btn" data-layer="${val}" ` +
+      `style="--c:${color}">${escapeHtml(label)}</button>`;
+    const parts = [btn("all", "全部疊圖", "#8a8a8a")];
+    for (const idx of usedIdx) {
+      parts.push(btn(String(idx), LAYER_NAMES[idx] || `L${idx}`, LAYER_COLORS[idx] || "#555"));
+    }
+    return `<div class="cs-layer-bar">${parts.join("")}</div>`;
+  }
+
+  // One cell in single-layer mode: the selected layer's own legend, big and
+  // centred. Transparent/empty slots on that layer fall through to BASE, so we
+  // show the base legend dimmed (it tells you what the key still does there).
+  function singleCell(byIndex, base, idx, r, c) {
+    const baseKey = base.rows[r].keys[c];
+    if (!baseKey) return `<div class="cs-key gap" aria-hidden="true"></div>`;
+    const k = byIndex[idx].rows[r].keys[c];
+    if (!isLiveSlot(k)) {
+      const bres = baseKey.resolved || {};
+      const btxt = aliasOr(baseKey.raw, bres.label_top ?? "");
+      return (
+        `<div class="cs-key cs-single trn">` +
+        `<span class="cs-single-wrap"><span class="cs-single-main">${escapeHtml(btxt || "")}</span></span>` +
+        `</div>`
+      );
+    }
+    const res = k.resolved || {};
+    const top = aliasOr(k.raw, res.label_top ?? "");
+    const bot = res.label_bottom ?? "";
+    const kind = res.expanded_kind || "plain";
+    let inner = `<span class="cs-single-main">${escapeHtml(top || " ")}</span>`;
+    if (bot) inner += `<span class="cs-single-sub">${escapeHtml(bot)}</span>`;
+    return `<div class="cs-key cs-single kind-${kind}"><span class="cs-single-wrap">${inner}</span></div>`;
+  }
+
+  function renderSingleBoard(byIndex, base, idx) {
+    // Same trimmed shape as the combined view (computed across all layers).
+    const geo = window.gridRender.usedGeometry({ layers: Object.values(byIndex) });
+    const renderRow = (cols, r) =>
+      `<div class="row row-${base.rows[r].row}" style="grid-template-columns: repeat(${cols.length}, var(--key-w))">` +
+      cols.map((c) => singleCell(byIndex, base, idx, r, c)).join("") +
+      `</div>`;
+    const color = LAYER_COLORS[idx] || "#555";
+    const name = LAYER_NAMES[idx] || `L${idx}`;
+    return (
+      `<div class="cs-single-cap" style="color:${color}">Layer ${idx} — ${escapeHtml(name)}（只顯示這層）</div>` +
+      `<div class="keyboard cs-board cs-single-board" style="--layer-c:${color}">` +
+      `<div class="half half-left">${geo.left.rows.map((r) => renderRow(geo.left.cols, r)).join("")}</div>` +
+      `<div class="half half-right">${geo.right.rows.map((r) => renderRow(geo.right.cols, r)).join("")}</div>` +
+      `</div>`
+    );
+  }
+
+  const ROOT_PX = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+
+  // Shrink one label's font until its full text fits its box width. The rem
+  // value is the MAX (the CSS size); we only scale DOWN, stopping at minPx, so
+  // long strings show in full instead of ellipsis-clipping. Resets to max first
+  // so repeated calls (on resize) re-measure from scratch.
+  function fitEl(el, maxRem, minPx) {
+    const maxPx = maxRem * ROOT_PX;
+    el.style.fontSize = maxPx + "px";
+    // clientWidth 0 → board is hidden (not laid out yet); leave at max.
+    if (!el.clientWidth || el.scrollWidth <= el.clientWidth) return;
+    let size = Math.max(minPx, Math.floor((maxPx * el.clientWidth) / el.scrollWidth * 10) / 10);
+    el.style.fontSize = size + "px";
+    let guard = 0;
+    while (el.scrollWidth > el.clientWidth && size > minPx && guard < 14) {
+      size -= 0.5;
+      el.style.fontSize = size + "px";
+      guard += 1;
+    }
+  }
+
+  // Auto-fit every label so its whole string shows: single-layer keys
+  // (.cs-single-main), and the combined overlay's base legend (.cs-base) + each
+  // per-layer line (.cs-ov). No-ops while hidden; the ResizeObserver re-runs it
+  // once the tab/HUD becomes visible or the window width changes.
+  function fitBoardText() {
+    const wrap = document.getElementById("cs-board-wrap");
+    if (!wrap) return;
+    wrap.querySelectorAll(".cs-single-main").forEach((el) => fitEl(el, 1.35, 8));
+    wrap.querySelectorAll(".cs-base").forEach((el) => fitEl(el, 0.95, 7));
+    wrap.querySelectorAll(".cs-ov").forEach((el) => {
+      if (!el.classList.contains("cs-ov-empty")) fitEl(el, 0.6, 5);
+    });
+  }
+
+  // The board is first rendered while the tab is hidden (show() runs on load),
+  // so fitBoardText() can't measure then. Observe the board wrapper and re-fit
+  // when it gains/changes width (tab switch, HUD open, window resize). Width-
+  // guarded so font tweaks — which don't change the wrapper width — never loop.
+  let _lastFitWidth = -1;
+  let _fitObserver = null;
+  function watchBoardResize() {
+    const wrap = document.getElementById("cs-board-wrap");
+    if (!wrap || typeof ResizeObserver === "undefined") return;
+    if (_fitObserver) _fitObserver.disconnect();
+    _fitObserver = new ResizeObserver(() => {
+      const w = wrap.clientWidth;
+      if (!w || w === _lastFitWidth) return;
+      _lastFitWidth = w;
+      fitBoardText();
+    });
+    _fitObserver.observe(wrap);
+  }
+
+  // Re-render just the legend + board (no refetch) for the current selection.
+  function renderBoardArea() {
+    const layout = layoutCache;
+    if (!layout) return;
+    const byIndex = {};
+    layout.layers.forEach((l) => (byIndex[l.index] = l));
+    const base = byIndex[0];
+    const legendWrap = document.getElementById("cs-legend-wrap");
+    const boardWrap = document.getElementById("cs-board-wrap");
+    if (!base || !legendWrap || !boardWrap) return;
+
+    container.querySelectorAll(".cs-layer-btn").forEach((b) => {
+      const v = b.dataset.layer;
+      const on = (selectedLayer === null && v === "all") || String(selectedLayer) === v;
+      b.classList.toggle("active", on);
+    });
+
+    if (selectedLayer === null) {
+      const built = renderBoard(layout);
+      if (typeof built === "string") {
+        legendWrap.innerHTML = "";
+        boardWrap.innerHTML = built;
+        return;
+      }
+      legendWrap.innerHTML = renderLegend(built.overlayIdx, layout);
+      boardWrap.innerHTML = built.board;
+    } else {
+      legendWrap.innerHTML = "";
+      boardWrap.innerHTML = renderSingleBoard(byIndex, base, selectedLayer);
+    }
+    // Fit now (if visible) and force the observer to re-fit on next resize even
+    // when the wrapper width is unchanged (content just changed under it).
+    _lastFitWidth = -1;
+    fitBoardText();
+  }
+
   // Cheatsheet has no hover popup, so when a name exists we show ONLY the name
   // (it replaces the keycode/combo entirely).
   function aliasOr(raw, fallback) {
@@ -272,24 +431,39 @@
     ]);
     if (!layout) return;
 
-    const built = renderBoard(layout);
-    if (typeof built === "string") {
-      container.innerHTML = built; // error
+    const base = layout.layers.find((l) => l.index === 0);
+    if (!base) {
+      container.innerHTML = renderError("no base layer (0) in .vil");
       return;
     }
+    const usedIdx = layout.layers.filter(isLayerUsed).map((l) => l.index);
+    // Drop a stale selection (e.g. after uploading a layout with fewer layers).
+    if (selectedLayer !== null && !usedIdx.includes(selectedLayer)) selectedLayer = null;
 
     container.innerHTML =
       `<div class="cs-toolbar">` +
       `<button id="cs-print-btn" type="button">🖨 列印 / 存 PDF</button>` +
-      `<span class="cs-hint">上傳新的 .vil（上方 Load Vial…）即會自動更新此圖。列印請選「橫向」。</span>` +
+      `<span class="cs-hint">點上方 layer 按鈕只看單層；「全部疊圖」回到合併檢視。上傳新的 .vil 會自動更新。列印請選「橫向」。</span>` +
       `</div>` +
-      renderLegend(built.overlayIdx, layout) +
-      built.board +
+      renderLayerBar(usedIdx) +
+      `<div id="cs-legend-wrap"></div>` +
+      `<div id="cs-board-wrap"></div>` +
       `<div class="cs-refs">${renderCombos(layout)}${renderTapDance(layout)}</div>` +
       `<div class="cs-foot">中央＝點按 · 旁邊洋紅＝長按 · 下方彩色＝各 layer · ●＝參與 combo</div>`;
 
     const btn = document.getElementById("cs-print-btn");
     if (btn) btn.addEventListener("click", () => window.print());
+
+    container.querySelectorAll(".cs-layer-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        const v = b.dataset.layer;
+        selectedLayer = v === "all" ? null : Number(v);
+        renderBoardArea();
+      });
+    });
+
+    renderBoardArea();
+    watchBoardResize();
   }
 
   function escapeHtml(s) {

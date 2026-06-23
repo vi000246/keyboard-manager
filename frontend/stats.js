@@ -5,7 +5,7 @@
   const root = document.getElementById("view-stats");
   // Layer dropdown now lives inside this view (used to be a global element
   // in the header — only Stats really needed it).
-  const LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
+  const LAYER_NAMES = ["BASE", "NAV", "NUM", "SYM", "FUNC", ""];
   let apps = [];
   let layout = null;
   let loaded = false;

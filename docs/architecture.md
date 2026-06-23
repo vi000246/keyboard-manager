@@ -120,6 +120,37 @@ CREATE TABLE snapshots (
 );
 ```
 
+## Input formats: Vial `.vil` + ZMK keymap-JSON
+
+`/api/layout` (and the upload endpoint) accept **two** layout formats, detected
+by content — no separate endpoint or flag:
+
+- **Vial `.vil`** — the primary, fully-supported format (`parsers/vial.py`).
+- **ZMK keymap-JSON** — a tolerant parser (`parsers/zmk.py`) for the JSON shape
+  produced by the community keymap-editor and similar tools. (ZMK Studio itself
+  has no official keymap export yet — zmk-studio issue #124.)
+
+The ZMK parser does **not** re-implement label expansion. It rewrites each ZMK
+binding into the QMK-style keycode string the existing resolver already
+understands (`&kp Q` → `KC_Q`, `&lt 2 SPACE` → `LT2(KC_SPACE)`, `&mt LCTRL A` →
+`LCTL_T(KC_A)`, `&kp LG(C)` → `LGUI(KC_C)`, `&trans` → `KC_TRNS`) and returns the
+same `vial.Layout`. Detection is `vial_protocol` present → Vial; else `layers`
+array present → ZMK (`zmk.looks_like_zmk`).
+
+> ⚠️ **ZMK support is untested against real hardware.** Two assumptions to
+> revisit once a real export is available:
+> 1. **Schema** — accepted shapes live in `zmk._extract_layers` /
+>    `zmk._binding_to_str` (plain `"&kp Q"` strings *and* keymap-editor
+>    `{value, params}` objects). Widen there if your export differs.
+> 2. **Physical layout** — ZMK bindings are a flat per-layer list; the frontend
+>    draws a fixed 10×7 split grid, so the flat list is dropped onto
+>    `zmk.DEFAULT_SLOT_MAP` (the bundled sample board's live-key positions) in
+>    order. Redefine `DEFAULT_SLOT_MAP` for a differently-shaped ZMK board.
+
+ZMK has no Vial-style tap-dance/macro arrays, so those come back empty; ZMK
+combos (which reference key *positions*) are mapped to the base-layer keycode at
+each position so the combo list still renders.
+
 ## Endpoint sketch
 
 | Method | Path | Milestone | Purpose |

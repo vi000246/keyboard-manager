@@ -7,6 +7,7 @@ GET  /api/layout/source     → tells the UI which file path is currently active
 """
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 from dataclasses import asdict
@@ -14,6 +15,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
 
+from ..parsers import zmk
 from ..parsers.keycode_labels import KEYCODE_LABELS
 from ..parsers.keycodes import LayoutContext, resolve
 from ..parsers.vial import VialParseError, parse
@@ -46,6 +48,23 @@ def _active_vial_path():
     return VIAL_PATH
 
 
+def _parse_layout(path: Path):
+    """Parse a layout file, auto-detecting Vial `.vil` vs ZMK keymap-JSON.
+
+    Both parsers return the same `vial.Layout` shape, so everything downstream
+    (resolver, serializer, frontend) is format-agnostic. ZmkParseError
+    subclasses VialParseError, so callers' existing handling still applies.
+    """
+    try:
+        data = json.loads(Path(path).read_text())
+    except (json.JSONDecodeError, OSError):
+        # Not parseable as JSON — let the Vial parser raise the canonical error.
+        return parse(path)
+    if zmk.looks_like_zmk(data):
+        return zmk.parse(path)
+    return parse(path)
+
+
 def _load(path: Path) -> dict:
     if not path.exists():
         raise VialNotFound(str(path))
@@ -56,7 +75,7 @@ def _load(path: Path) -> dict:
         return _cache["data"]
 
     try:
-        layout = parse(path)
+        layout = _parse_layout(path)
     except VialParseError as e:
         logger.error("vial parse failed path=%s reason=%s", path, e)
         raise VialParseFailed(str(e)) from e
@@ -184,12 +203,13 @@ async def upload_layout(file: UploadFile):
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp.write_bytes(body)
 
-    # Validate by parsing before swapping the live file into place.
+    # Validate by parsing before swapping the live file into place. Accepts
+    # both Vial `.vil` and ZMK keymap-JSON (auto-detected by content).
     try:
-        parse(tmp)
+        _parse_layout(tmp)
     except VialParseError as e:
         tmp.unlink(missing_ok=True)
-        raise VialParseFailed(f"uploaded file is not a valid .vil: {e}") from e
+        raise VialParseFailed(f"uploaded file is not a valid .vil / ZMK keymap: {e}") from e
 
     shutil.move(str(tmp), str(target))
     _cache.clear()

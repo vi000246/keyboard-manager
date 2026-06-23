@@ -8,7 +8,7 @@
   const container = document.getElementById("view-keyname");
   if (!container) return;
 
-  const LAYER_NAMES = ["BASE", "NAV", "SYM", "FN", "MEDIA", "ADJ"];
+  const LAYER_NAMES = ["BASE", "NAV", "NUM", "SYM", "FUNC", "ADJ"];
   let layoutCache = null;
   let entries = []; // [{raw, label, where}]
 

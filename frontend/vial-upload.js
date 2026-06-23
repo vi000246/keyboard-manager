@@ -61,7 +61,7 @@
       notifyLayoutChanged();
     } finally {
       uploadBtn.disabled = false;
-      uploadBtn.textContent = "Load Vial…";
+      uploadBtn.textContent = "Load .vil / ZMK…";
       fileInput.value = ""; // allow re-uploading the same filename
     }
   });

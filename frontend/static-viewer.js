@@ -10,7 +10,7 @@
 
   // Mirrors the dropdown option text in index.html — keep in sync if a layer
   // gets renamed there.
-  const LAYER_NAMES = ["BASE", "NAV", "", "", "MEDIA", ""];
+  const LAYER_NAMES = ["BASE", "NAV", "NUM", "SYM", "FUNC", ""];
 
   function isLayerUsed(layer) {
     for (const row of layer.rows) {
@@ -53,6 +53,9 @@
     }
 
     const deco = window.gridRender.decorationsFor(layout);
+    // Compute the used rows/columns once from the whole layout so every layer
+    // block shares the same (trimmed) shape — unused outer rows/cols are hidden.
+    const geo = window.gridRender.usedGeometry(layout);
     container.innerHTML = usedLayers
       .map((layer) => {
         const name = LAYER_NAMES[layer.index] || "";
@@ -60,7 +63,7 @@
         return `
           <section class="layer-block">
             <h2 class="layer-title">${escapeHtml(title)}</h2>
-            ${window.gridRender.renderLayer(layer, deco)}
+            ${window.gridRender.renderLayer(layer, deco, geo)}
           </section>`;
       })
       .join("");
