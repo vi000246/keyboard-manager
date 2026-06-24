@@ -13,7 +13,7 @@
 
   let layoutCache = null;
   // null = combined overlay (all layers on one board); a number = show ONLY
-  // that layer's keys (single-layer mode, toggled by the layer buttons).
+  // that layer's keys (single-layer mode, toggled by the layer buttons or Tab).
   let selectedLayer = null;
 
   // Index-aligned with the .vil layer order. Keep in sync with
@@ -277,10 +277,18 @@
     const btn = (val, label, color) =>
       `<button type="button" class="cs-layer-btn" data-layer="${val}" ` +
       `style="--c:${color}">${escapeHtml(label)}</button>`;
-    const parts = [btn("all", "全部疊圖", "#8a8a8a")];
-    for (const idx of usedIdx) {
-      parts.push(btn(String(idx), LAYER_NAMES[idx] || `L${idx}`, LAYER_COLORS[idx] || "#555"));
+    // Button order mirrors the Tab cycle: non-BASE layers in index order, then
+    // BASE, then the combined overlay last.
+    const ordered = usedIdx.filter((i) => i !== 0);
+    if (usedIdx.includes(0)) ordered.push(0); // BASE near the end
+    const parts = [];
+    for (const idx of ordered) {
+      // Prefix each button with its layer index (NAV→1, NUM→2, SYM→3…) so the
+      // number matches the LTn / MO(n) activator you press to reach the layer.
+      const name = LAYER_NAMES[idx] || `L${idx}`;
+      parts.push(btn(String(idx), `${idx} ${name}`, LAYER_COLORS[idx] || "#555"));
     }
+    parts.push(btn("all", "全部疊圖", "#8a8a8a")); // combined overlay last
     return `<div class="cs-layer-bar">${parts.join("")}</div>`;
   }
 
@@ -424,6 +432,38 @@
     return a || fallback;
   }
 
+  // Deep-link the opening layer via ?layer=… (the Hammerspoon HUD uses this to
+  // land on SYM). Accepts a layer name ("sym", case-insensitive), an index
+  // ("3"), or "all" for the combined overlay. Unknown → null (combined).
+  function initialLayerFromUrl() {
+    const raw = new URLSearchParams(location.search).get("layer");
+    if (!raw) return null;
+    const v = raw.trim();
+    if (!v || v.toLowerCase() === "all") return null;
+    const byName = LAYER_NAMES.findIndex((n) => n.toLowerCase() === v.toLowerCase());
+    if (byName !== -1) return byName;
+    const n = Number(v);
+    return Number.isInteger(n) ? n : null;
+  }
+
+  // Tab / Shift+Tab cycles the displayed layer. Cycle order is every USED
+  // non-BASE layer in .vil order, then BASE last, wrapping around. The combined
+  // overlay (null) is NOT part of the cycle — reach it via the layer bar button.
+  function cycleLayer(dir) {
+    const layout = layoutCache;
+    if (!layout) return;
+    const usedIdx = layout.layers.filter(isLayerUsed).map((l) => l.index);
+    if (!usedIdx.length) return;
+    const cycle = usedIdx.filter((i) => i !== 0);
+    if (usedIdx.includes(0)) cycle.push(0); // BASE goes last
+    if (!cycle.length) return;
+    let pos = cycle.findIndex((v) => v === selectedLayer);
+    if (pos === -1) pos = 0;
+    pos = (pos + dir + cycle.length) % cycle.length;
+    selectedLayer = cycle[pos];
+    renderBoardArea();
+  }
+
   async function show() {
     const [layout] = await Promise.all([
       ensureLayout(),
@@ -479,6 +519,16 @@
     show();
   }
 
+  // Tab cycles layers while the cheatsheet view is on-screen. Registered once
+  // (not per show()) so refresh()/alias reloads don't stack duplicate handlers.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab") return;
+    if (container.classList.contains("hidden")) return;
+    e.preventDefault();
+    cycleLayer(e.shiftKey ? -1 : 1);
+  });
+
+  selectedLayer = initialLayerFromUrl();
   show();
   if (window.keyAliases) window.keyAliases.onChange(refresh);
   window.cheatsheet = { show, refresh, getLayout: () => layoutCache };
