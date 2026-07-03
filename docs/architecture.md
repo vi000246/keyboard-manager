@@ -106,6 +106,19 @@ CREATE TABLE events (
 CREATE INDEX idx_events_app_key ON events(app_bundle, key);
 CREATE INDEX idx_events_ts     ON events(ts);
 
+-- Pre-aggregated mirror of events, maintained automatically by an
+-- AFTER INSERT trigger (trg_events_agg_insert). All stats reads (top-N,
+-- totals, heatmap, nameable) query this table so cost stays proportional
+-- to distinct (app, key, modifiers) combos instead of total keystrokes.
+-- Backfilled once from events when the trigger is first created.
+CREATE TABLE events_agg (
+  app_bundle TEXT    NOT NULL,
+  key        TEXT    NOT NULL,
+  modifiers  TEXT    NOT NULL DEFAULT '',
+  count      INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (app_bundle, key, modifiers)
+) WITHOUT ROWID;
+
 CREATE TABLE apps (
   bundle_id    TEXT PRIMARY KEY,
   display_name TEXT,

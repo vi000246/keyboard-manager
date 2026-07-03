@@ -150,11 +150,29 @@
       </span>`;
   }
 
+  // Whether polling has been requested (i.e. the Stats view was opened) —
+  // lets the visibilitychange handler know to resume after a hidden tab.
+  let helperPollWanted = false;
+
   function startHelperPolling() {
-    if (helperPollTimer) return;
+    helperPollWanted = true;
+    if (helperPollTimer || document.hidden) return;
     pollHelperStatus();
     helperPollTimer = setInterval(pollHelperStatus, 5000);
   }
+
+  // Don't poll /api/helper/status while the tab is hidden — a long-lived
+  // background tab was probing the helper WS every 5s for nothing.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (helperPollTimer) {
+        clearInterval(helperPollTimer);
+        helperPollTimer = null;
+      }
+    } else if (helperPollWanted) {
+      startHelperPolling();
+    }
+  });
 
   function renderHeatmapSection(heatmap) {
     if (!heatmap) return `<p class="placeholder">heatmap unavailable</p>`;

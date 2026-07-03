@@ -111,6 +111,85 @@ def test_schema_uses_if_not_exists_for_every_create():
     )
 
 
+# ─── events_agg aggregation mirror ─────────────────────────────────────
+
+
+def test_events_agg_trigger_maintains_counts(tmp_path):
+    """Every insert into events must be reflected in events_agg, summed by
+    (app_bundle, key, modifiers) — this is what all stats reads rely on."""
+    db = tmp_path / "test.db"
+    ensure_schema(db)
+    conn = sqlite3.connect(db)
+    try:
+        conn.executemany(
+            "INSERT INTO events(ts, app_bundle, key, modifiers, count, snapshot_id, source) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            [
+                (100, "com.foo", "j", "",    1, 1, "t"),
+                (101, "com.foo", "j", "",    2, 1, "t"),
+                (102, "com.foo", "v", "cmd", 1, 1, "t"),
+                (103, "com.bar", "j", "",    1, 1, "t"),
+            ],
+        )
+        conn.commit()
+        rows = conn.execute(
+            "SELECT app_bundle, key, modifiers, count FROM events_agg "
+            "ORDER BY app_bundle, key, modifiers"
+        ).fetchall()
+        assert rows == [
+            ("com.bar", "j", "", 1),
+            ("com.foo", "j", "", 3),
+            ("com.foo", "v", "cmd", 1),
+        ]
+    finally:
+        conn.close()
+
+
+def test_events_agg_backfilled_for_preexisting_events(tmp_path):
+    """Upgrade path: a live DB that accumulated events before events_agg
+    existed must get a one-shot backfill when ensure_schema next runs."""
+    db = tmp_path / "test.db"
+    ensure_schema(db)
+
+    # Simulate the legacy state: events present, but no trigger / agg rows.
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute("DROP TRIGGER trg_events_agg_insert")
+        conn.execute("DELETE FROM events_agg")
+        conn.executemany(
+            "INSERT INTO events(ts, app_bundle, key, modifiers, count, snapshot_id, source) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?)",
+            [
+                (100, "com.foo", "j", "", 1, 1, "t"),
+                (101, "com.foo", "j", "", 1, 1, "t"),
+            ],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    ensure_schema(db)
+
+    conn = sqlite3.connect(db)
+    try:
+        rows = conn.execute(
+            "SELECT app_bundle, key, modifiers, count FROM events_agg"
+        ).fetchall()
+        assert rows == [("com.foo", "j", "", 2)]
+        # And the freshly re-created trigger keeps maintaining it.
+        conn.execute(
+            "INSERT INTO events(ts, app_bundle, key, modifiers, count, snapshot_id, source) "
+            "VALUES(102, 'com.foo', 'j', '', 1, 1, 't')"
+        )
+        conn.commit()
+        total = conn.execute(
+            "SELECT count FROM events_agg WHERE key='j'"
+        ).fetchone()[0]
+        assert total == 3
+    finally:
+        conn.close()
+
+
 def test_ensure_schema_on_populated_db_preserves_rows(tmp_path):
     """The high-value contract: running ensure_schema() on a database that
     already has live capture events must NOT touch those rows. This is the

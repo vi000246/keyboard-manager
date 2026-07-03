@@ -19,11 +19,37 @@ from ..db.heatmap_mapper import (
     overlay_stats,
 )
 from ..db.repository import AppsRepo, StatsRepo
-from ..parsers.vial import parse
 
 logger = logging.getLogger("keyboard_manager.api.stats")
 
 router = APIRouter()
+
+# (path, mtime) → (base_idx, mod_idx, combo_idx). Parsing the layout and
+# resolving every key three times per request was the hottest path on the
+# Stats page; the layout only changes on upload / file edit, so key by mtime
+# exactly like layout.py's parse cache.
+_idx_cache: dict = {}
+
+
+def _heatmap_indexes():
+    from .errors import VialNotFound
+    from .layout import _active_vial_path, _parse_layout
+
+    path = _active_vial_path()
+    if not path.exists():
+        raise VialNotFound(str(path))
+    cache_key = (str(path), path.stat().st_mtime)
+    if _idx_cache.get("key") == cache_key:
+        return _idx_cache["value"]
+    layout = _parse_layout(path)
+    value = (
+        build_position_index(layout),
+        build_modifier_position_index(layout),
+        build_combo_position_index(layout),
+    )
+    _idx_cache["key"] = cache_key
+    _idx_cache["value"] = value
+    return value
 
 
 @router.get("/api/apps")
@@ -63,12 +89,11 @@ def get_heatmap(app: str | None = None):
     `coverage_pct` is computed over included events (post-filter) so it reflects
     "how much of what we're surfacing is mapped to a physical key".
     """
-    from ..main import DB_PATH, VIAL_PATH
+    from ..main import DB_PATH
 
-    layout = parse(VIAL_PATH)
-    base_idx = build_position_index(layout)
-    mod_idx = build_modifier_position_index(layout)
-    combo_idx = build_combo_position_index(layout)
+    # Cached by layout-file mtime; also honors an uploaded .vil override
+    # (this used to parse VIAL_PATH directly, ignoring uploads).
+    base_idx, mod_idx, combo_idx = _heatmap_indexes()
     repo = StatsRepo(DB_PATH)
     # Pull both kinds so we can show combos plus the functional singles
     # (arrows / F-keys / Esc / Tab) that survive the typing filter.
@@ -202,7 +227,7 @@ def _scoped_total(
     try:
         row = conn.execute(
             f"SELECT COALESCE(SUM(count), 0) "
-            f"FROM events WHERE {where} {app_clause} {key_clause}",
+            f"FROM events_agg WHERE {where} {app_clause} {key_clause}",
             params,
         ).fetchone()
         return row[0] or 0

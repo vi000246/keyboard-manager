@@ -316,14 +316,62 @@
     return null;
   }
 
-  function applyPressed(gridRoot) {
-    // Clear BOTH classes so the amber virtual marker disappears on release.
-    gridRoot.querySelectorAll(".key.pressed, .key.pressed-virtual").forEach((k) => {
-      k.classList.remove("pressed");
-      k.classList.remove("pressed-virtual");
+  // ── DOM cache + incremental updates ────────────────────────────────
+  //
+  // A full render() rebuilds the grid via innerHTML — far too expensive to
+  // run per WS key event (fast typing fires 20+ events/sec, and each one
+  // used to rebuild the entire grid then re-scan it with querySelectorAll).
+  // Instead we cache cell references after every full render; key events
+  // only touch classes and the chips strip, and consecutive events within
+  // one frame are coalesced via requestAnimationFrame.
+  let dom = null;          // { gridRoot, cells, labelCells, comboRows, chipsEl }
+  let _pressedCells = [];  // elements currently carrying .pressed/.pressed-virtual
+  let _comboLit = [];      // elements currently carrying .combo-highlight/.combo-active
+
+  function buildDomCache() {
+    const gridRoot = root.querySelector(".keyboard");
+    if (!gridRoot) { dom = null; return; }
+    // "r:c" → cell element. Positional col index, matching the previous
+    // `rowEl.querySelectorAll(".key")[col]` lookup semantics.
+    const cells = new Map();
+    gridRoot.querySelectorAll(".row").forEach((rowEl) => {
+      const rowCls = [...rowEl.classList].find((c) => /^row-\d+$/.test(c));
+      if (!rowCls) return;
+      const r = rowCls.slice(4);
+      rowEl.querySelectorAll(".key").forEach((cell, i) => cells.set(`${r}:${i}`, cell));
     });
-    // Don't early-return when only virtualHeld has entries — we still need
-    // the loop below to paint them.
+    // label_top text → [cells], for combo highlighting without re-reading
+    // textContent on every event.
+    const labelCells = new Map();
+    gridRoot.querySelectorAll(".key").forEach((cell) => {
+      const top = cell.querySelector(".label-top")?.textContent?.trim();
+      if (!top) return;
+      if (!labelCells.has(top)) labelCells.set(top, []);
+      labelCells.get(top).push(cell);
+    });
+    const comboRows = new Map(); // combo index (string) → legend row element
+    root.querySelectorAll(".combo-row").forEach((el) => {
+      comboRows.set(el.dataset.comboIndex, el);
+    });
+    dom = {
+      gridRoot,
+      cells,
+      labelCells,
+      comboRows,
+      chipsEl: root.querySelector(".held-chips"),
+    };
+    _pressedCells = [];
+    _comboLit = [];
+  }
+
+  function applyPressed() {
+    if (!dom) return;
+    // Clear BOTH classes so the amber virtual marker disappears on release.
+    for (const el of _pressedCells) {
+      el.classList.remove("pressed");
+      el.classList.remove("pressed-virtual");
+    }
+    _pressedCells = [];
     if (heldKeys.size === 0 && virtualHeld.size === 0) return;
 
     // If the held keys are actually a combo's modified output, don't paint the
@@ -337,10 +385,11 @@
         const cellKey = `${s.row}:${s.col}`;
         if (lit.has(cellKey)) continue;
         lit.add(cellKey);
-        const rowEl = gridRoot.querySelector(`.row.row-${s.row}`);
-        if (!rowEl) continue;
-        const cellAtCol = rowEl.querySelectorAll(".key")[s.col];
-        if (cellAtCol) cellAtCol.classList.add("pressed");
+        const cell = dom.cells.get(cellKey);
+        if (cell) {
+          cell.classList.add("pressed");
+          _pressedCells.push(cell);
+        }
       }
     }
     // Virtual holds: ONLY add the dedicated `.pressed-virtual` class. Adding
@@ -351,11 +400,11 @@
     for (const pos of virtualHeld) {
       if (lit.has(pos)) continue;
       lit.add(pos);
-      const [r, c] = pos.split(":").map(Number);
-      const rowEl = gridRoot.querySelector(`.row.row-${r}`);
-      if (!rowEl) continue;
-      const cellAtCol = rowEl.querySelectorAll(".key")[c];
-      if (cellAtCol) cellAtCol.classList.add("pressed-virtual");
+      const cell = dom.cells.get(pos);
+      if (cell) {
+        cell.classList.add("pressed-virtual");
+        _pressedCells.push(cell);
+      }
     }
   }
 
@@ -380,12 +429,38 @@
         ${buildHeldChips()}
       </div>
       ${buildComboLegend()}`;
-    const gridRoot = root.querySelector(".keyboard");
-    if (gridRoot) {
-      applyPressed(gridRoot);
-      applyComboHighlight(gridRoot);
-      markLayerClickableCells(gridRoot);
+    buildDomCache();
+    if (dom) {
+      applyPressed();
+      applyComboHighlight();
+      markLayerClickableCells(dom.gridRoot);
     }
+  }
+
+  /** Cheap per-key-event refresh: chips + pressed/combo classes only. */
+  function updateDynamic() {
+    if (!dom) {
+      render();
+      return;
+    }
+    if (dom.chipsEl) dom.chipsEl.innerHTML = buildHeldChips();
+    applyPressed();
+    applyComboHighlight();
+  }
+
+  // Coalesce bursts of WS events into one paint per animation frame.
+  let _rafId = null;
+  let _needFullRender = false;
+  function scheduleUpdate(full) {
+    if (full) _needFullRender = true;
+    if (_rafId !== null) return;
+    _rafId = requestAnimationFrame(() => {
+      _rafId = null;
+      const doFull = _needFullRender;
+      _needFullRender = false;
+      if (doFull) render();
+      else updateDynamic();
+    });
   }
 
   // Paint `.has-layer-target` on every cell whose BASE-layer slot is a
@@ -458,13 +533,13 @@
    * We accept that — over-highlighting is less confusing than silently
    * dropping the combo annotation.
    */
-  function applyComboHighlight(gridRoot) {
-    gridRoot.querySelectorAll(".combo-highlight").forEach((el) =>
-      el.classList.remove("combo-highlight")
-    );
-    root.querySelectorAll(".combo-row.combo-active").forEach((el) =>
-      el.classList.remove("combo-active")
-    );
+  function applyComboHighlight() {
+    if (!dom) return;
+    for (const el of _comboLit) {
+      el.classList.remove("combo-highlight");
+      el.classList.remove("combo-active");
+    }
+    _comboLit = [];
     if (!layout || !Array.isArray(layout.combo) || heldKeys.size === 0) return;
 
     const heldLabels = new Set();
@@ -486,18 +561,26 @@
         (chordCombo && chordCombo.index === c.index);
       if (!triggerHit && !outputHit) continue;
 
-      const row = root.querySelector(`.combo-row[data-combo-index="${c.index}"]`);
-      if (row) row.classList.add("combo-active");
+      const row = dom.comboRows.get(String(c.index));
+      if (row) {
+        row.classList.add("combo-active");
+        _comboLit.push(row);
+      }
 
       // Light up every cell whose label_top matches a trigger or the output.
       // We match by the rendered top label rather than raw because the
       // output may live on a TD branch (e.g. KC_ESCAPE is TD(1).tap, so
-      // its cell's raw is "TD(1)" — not directly comparable).
-      const wanted = new Set([...triggerLabels, outputLabel].filter(Boolean));
-      gridRoot.querySelectorAll(".key").forEach((cell) => {
-        const top = cell.querySelector(".label-top")?.textContent?.trim();
-        if (top && wanted.has(top)) cell.classList.add("combo-highlight");
-      });
+      // its cell's raw is "TD(1)" — not directly comparable). Labels were
+      // indexed once in buildDomCache instead of re-read per event.
+      for (const label of [...triggerLabels, outputLabel]) {
+        if (!label) continue;
+        for (const cell of dom.labelCells.get(label) || []) {
+          if (!cell.classList.contains("combo-highlight")) {
+            cell.classList.add("combo-highlight");
+            _comboLit.push(cell);
+          }
+        }
+      }
     }
   }
 
@@ -537,9 +620,12 @@
       } else if (msg.type === "up") {
         heldKeys.delete(msg.key.toLowerCase());
       }
+      // Layer only changes via virtual (click) holds, so key events almost
+      // always take the cheap incremental path; keep the check as a guard.
       const newLayer = computeActiveLayer();
-      if (newLayer !== activeLayer) activeLayer = newLayer;
-      render();
+      const layerChanged = newLayer !== activeLayer;
+      if (layerChanged) activeLayer = newLayer;
+      scheduleUpdate(layerChanged);
     };
 
     socket.onerror = () => {

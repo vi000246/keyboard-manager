@@ -65,19 +65,36 @@ class EventSink:
     # ── flushing ──────────────────────────────────────────────────────
 
     def flush_now(self) -> int:
-        """Drain the buffer to SQLite in one transaction. Returns rows written."""
+        """Drain the buffer to SQLite in one transaction. Returns rows written.
+
+        Rows identical up to the second — same (ts, app, key, modifiers) —
+        are merged into one row with a summed count before insert. Fast
+        typing / key repeat produces many such duplicates; merging costs no
+        information (ts already has second granularity) and shrinks both the
+        write batch and the events table.
+        """
         with self._lock:
             rows = self._buffer
             self._buffer = []
         if not rows:
             return 0
+        merged: dict[tuple, list] = {}
+        for r in rows:
+            ts, app_bundle, key, modifiers, count, snapshot_id, source = r
+            k = (ts, app_bundle, key, modifiers, snapshot_id, source)
+            slot = merged.get(k)
+            if slot is None:
+                merged[k] = [ts, app_bundle, key, modifiers, count, snapshot_id, source]
+            else:
+                slot[4] += count
+        out = [tuple(v) for v in merged.values()]
         conn = sqlite3.connect(self.db_path)
         try:
-            conn.executemany(_INSERT_SQL, rows)
+            conn.executemany(_INSERT_SQL, out)
             conn.commit()
         finally:
             conn.close()
-        return len(rows)
+        return len(out)
 
     def _schedule(self) -> None:
         if self._stopped:

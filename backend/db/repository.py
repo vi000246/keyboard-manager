@@ -107,7 +107,7 @@ class AppsRepo(_BaseRepo):
                 FROM apps a
                 LEFT JOIN (
                   SELECT app_bundle, SUM(count) AS total
-                  FROM events
+                  FROM events_agg
                   GROUP BY app_bundle
                 ) e ON e.app_bundle = a.bundle_id
                 ORDER BY total_count DESC, a.bundle_id ASC
@@ -151,9 +151,11 @@ class StatsRepo(_BaseRepo):
             params.extend([like, like])
         params.append(n)
         with self._conn() as c:
+            # events_agg (trigger-maintained mirror of events) keeps this a
+            # scan over distinct (app, key, modifiers) combos, not raw rows.
             rows = c.execute(
                 f"SELECT key, modifiers, SUM(count) AS total "
-                f"FROM events WHERE {kind_clause} {app_clause} {key_clause} {letter_clause} "
+                f"FROM events_agg WHERE {kind_clause} {app_clause} {key_clause} {letter_clause} "
                 f"GROUP BY key, modifiers ORDER BY total DESC LIMIT ?",
                 params,
             ).fetchall()
@@ -163,12 +165,12 @@ class StatsRepo(_BaseRepo):
         with self._conn() as c:
             if app:
                 row = c.execute(
-                    "SELECT COALESCE(SUM(count), 0) FROM events WHERE app_bundle=?",
+                    "SELECT COALESCE(SUM(count), 0) FROM events_agg WHERE app_bundle=?",
                     (app,),
                 ).fetchone()
             else:
                 row = c.execute(
-                    "SELECT COALESCE(SUM(count), 0) FROM events"
+                    "SELECT COALESCE(SUM(count), 0) FROM events_agg"
                 ).fetchone()
             return row[0] or 0
 

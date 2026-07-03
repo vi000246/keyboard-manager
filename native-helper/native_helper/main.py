@@ -129,7 +129,13 @@ class Helper:
             "app": app,
             "ts": ts,
         }
-        if self._loop is not None and self._loop.is_running():
+        # Skip the cross-thread scheduling entirely when nobody is watching —
+        # with no WS subscribers this ran per keystroke for nothing.
+        if (
+            self.dispatcher.subscribers
+            and self._loop is not None
+            and self._loop.is_running()
+        ):
             asyncio.run_coroutine_threadsafe(
                 self.dispatcher.broadcast(payload), self._loop
             )

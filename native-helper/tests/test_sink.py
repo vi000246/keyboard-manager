@@ -70,6 +70,22 @@ def test_stop_flushes_remaining_buffer(db):
     assert len(_rows(db, "SELECT * FROM events")) == 1
 
 
+def test_flush_merges_same_second_duplicates(db):
+    """Identical (ts, app, key, modifiers) rows collapse into one row with a
+    summed count — key repeat / fast typing shouldn't bloat the events table."""
+    sn = open_snapshot(db, "test")
+    sink = EventSink(db, source="test", flush_interval=999)
+    sink.start(snapshot_id=sn)
+    sink.record(key="j", modifiers="", app_bundle="appA", ts=100)
+    sink.record(key="j", modifiers="", app_bundle="appA", ts=100)
+    sink.record(key="j", modifiers="", app_bundle="appA", ts=100)
+    sink.record(key="j", modifiers="", app_bundle="appA", ts=101)  # next second
+    n = sink.flush_now()
+    assert n == 2
+    rows = _rows(db, "SELECT ts, count FROM events ORDER BY ts")
+    assert [(r["ts"], r["count"]) for r in rows] == [(100, 3), (101, 1)]
+
+
 def test_carries_modifier_string(db):
     sn = open_snapshot(db, "test")
     sink = EventSink(db, source="test", flush_interval=999)
