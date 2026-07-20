@@ -87,6 +87,23 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 
 /* Thumb rows have leading empty slots — keep the layout consistent. */
 
+/* Physical-shape simulation. grid-render.js sets --key-dy / --key-rot per key
+   from the board's topology profile (backend/parsers/topology.py) to reproduce
+   column stagger and the splayed thumb cluster. Because they're folded into
+   ONE composed transform here, state styles like .pressed must contribute
+   through --key-press rather than setting `transform` themselves — otherwise
+   they'd wipe out the board's geometry. Boards with no profile supply neither
+   variable and render flat. */
+.key {
+  transform: translateY(var(--key-dy, 0)) rotate(var(--key-rot, 0deg))
+    translateY(var(--key-press, 0));
+}
+
+/* The cluster hangs below the letter block; the splay comes from --key-rot. */
+.row-thumb {
+  margin-top: 0.5rem;
+}
+
 .key {
   height: 3.6rem;
   border: 1px solid #3a3a3a;
@@ -139,10 +156,22 @@ code { background: #2a2a2a; padding: 2px 6px; border-radius: 3px; font-family: u
 .key.kind-layer-tap   { border-color: #4a8b6a; }   /* greenish */
 .key.kind-mod-tap     { border-color: #8a6abf; }   /* purple */
 .key.kind-tap-dance   { border-color: #bf9a3a; }   /* gold */
-.key.kind-shift-wrapped,
-.key.kind-mod-wrapped { border-color: #b07a3a; }   /* orange */
+/* shift-wrapped / mod-wrapped deliberately have NO accent: the cell already
+   shows the final output (e.g. "複製" for LGUI(KC_C)), and that is all the
+   user wants to read off the board. Highlighting "this is a combo of mods"
+   adds a category that carries no decision-making value. */
 .key.kind-transparent { background: #1a1a1a; opacity: 0.55; }
-.key.kind-empty       { background: transparent; border-style: dashed; opacity: 0.35; }
+/* Unassigned (KC_NO). Drawn as a real but blank cell — at 0.35 opacity these
+   read as holes in the board, which makes a sparse layer look broken rather
+   than merely empty. Recessed fill + muted border keeps them distinguishable
+   from an assigned key without hiding the physical key that IS there.
+   Not to be confused with `.key.gap`, which is a position with no physical
+   key at all and must stay invisible. */
+.key.kind-empty {
+  background: #1c1c1c;
+  border-color: #333;
+  opacity: 1;
+}
 .key.kind-unknown     { border-color: #c44; color: #fbb; }
 
 /* Combo participation badge: small cyan dot in the top-right corner.
@@ -536,10 +565,14 @@ body.embed .cs-legend { margin-top: 0; }
 .kn-name input:focus { border-color: #6a8fbe; outline: none; }
 .kn-saved { color: #4ade80; font-size: 0.75rem; margin-left: 0.5rem; }
 
-/* A named key gets a subtle accent in the Static / Interactive grids so it's
-   clear the label shown is a custom name (full detail is in the tooltip). */
-.key.has-alias { border-color: #c08a3a; }
-.key.has-alias .label-top { color: #ffcf8a; }
+/* A named key is deliberately NOT accented in the grids. Border colour is
+   reserved for what a key *does* (layer-tap / mod-tap / tap-dance / macro /
+   unknown); having a name is orthogonal to that, and since these rules sit
+   last among equal-specificity border-color declarations they used to
+   override every type colour — making named keys look like a category of
+   their own. The custom name is already visible as the label itself, and the
+   tooltip carries the full detail. `.has-alias` is still set on the element
+   for anything that needs to query it. */
 
 /* Custom name shown beside a shortcut's keycode in the Stats table. */
 .stat-alias { color: #ffcf8a; font-size: 0.85rem; margin-left: 0.45rem; }
@@ -779,7 +812,9 @@ body.embed .cs-legend { margin-top: 0; }
   border-color: #6aa3ea !important;
   color: #fff !important;
   box-shadow: 0 0 0 2px rgba(106, 163, 234, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
-  transform: translateY(1px);
+  /* Feeds the composed transform on .key so the press nudge stacks on top of
+     the board's stagger/rotation instead of replacing it. */
+  --key-press: 1px;
 }
 
 .key.pressed .label-bottom { color: #d6e8ff; }

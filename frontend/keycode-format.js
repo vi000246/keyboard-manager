@@ -27,8 +27,13 @@
    * @returns {string}         HTML for a `.key` cell.
    */
   function renderKey(key, col = 0, opts = {}) {
+    // Physical-geometry offsets (column stagger / thumb rotation) come from
+    // grid-render as a ready-made style string — gaps get it too, so a
+    // staggered column keeps its shape where the board has no key.
+    const styleAttr = opts.style ? ` style="${escapeAttr(opts.style)}"` : "";
+
     if (!key) {
-      return `<div class="key gap" aria-hidden="true" data-col="${col}"></div>`;
+      return `<div class="key gap" aria-hidden="true" data-col="${col}"${styleAttr}></div>`;
     }
 
     const r = key.resolved || {};
@@ -54,7 +59,7 @@
       : "";
 
     return `
-      <div class="${classes.join(" ")}" data-raw="${escapeAttr(key.raw)}" data-col="${col}">
+      <div class="${classes.join(" ")}" data-raw="${escapeAttr(key.raw)}" data-col="${col}"${styleAttr}>
         <div class="label-top">${labelTopHtml}</div>
         ${labelBotHtml}
       </div>`;

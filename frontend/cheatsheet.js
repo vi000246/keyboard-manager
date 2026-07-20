@@ -144,8 +144,8 @@
 
     const board =
       `<div class="keyboard cs-board">` +
-      `<div class="half half-left">${geo.left.rows.map((r) => renderRow(geo.left.cols, r)).join("")}</div>` +
-      `<div class="half half-right">${geo.right.rows.map((r) => renderRow(geo.right.cols, r)).join("")}</div>` +
+      `<div class="half half-left">${geo.left.rows.map((r) => renderRow(window.gridRender.displayCols(geo, "left"), r)).join("")}</div>` +
+      `<div class="half half-right">${geo.right.rows.map((r) => renderRow(window.gridRender.displayCols(geo, "right"), r)).join("")}</div>` +
       `</div>`;
 
     return { board, overlayIdx };
@@ -317,9 +317,14 @@
     return `<div class="cs-key cs-single kind-${kind}"><span class="cs-single-wrap">${inner}</span></div>`;
   }
 
-  function renderSingleBoard(byIndex, base, idx) {
+  function renderSingleBoard(byIndex, base, idx, topology) {
     // Same trimmed shape as the combined view (computed across all layers).
-    const geo = window.gridRender.usedGeometry({ layers: Object.values(byIndex) });
+    // `topology` must be threaded through from the layout — without it the
+    // board falls back to inferred geometry and loses the board's mirroring.
+    const geo = window.gridRender.usedGeometry({
+      layers: Object.values(byIndex),
+      topology,
+    });
     const renderRow = (cols, r) =>
       `<div class="row row-${base.rows[r].row}" style="grid-template-columns: repeat(${cols.length}, var(--key-w))">` +
       cols.map((c) => singleCell(byIndex, base, idx, r, c)).join("") +
@@ -329,8 +334,8 @@
     return (
       `<div class="cs-single-cap" style="color:${color}">Layer ${idx} — ${escapeHtml(name)}（只顯示這層）</div>` +
       `<div class="keyboard cs-board cs-single-board" style="--layer-c:${color}">` +
-      `<div class="half half-left">${geo.left.rows.map((r) => renderRow(geo.left.cols, r)).join("")}</div>` +
-      `<div class="half half-right">${geo.right.rows.map((r) => renderRow(geo.right.cols, r)).join("")}</div>` +
+      `<div class="half half-left">${geo.left.rows.map((r) => renderRow(window.gridRender.displayCols(geo, "left"), r)).join("")}</div>` +
+      `<div class="half half-right">${geo.right.rows.map((r) => renderRow(window.gridRender.displayCols(geo, "right"), r)).join("")}</div>` +
       `</div>`
     );
   }
@@ -417,7 +422,7 @@
       boardWrap.innerHTML = built.board;
     } else {
       legendWrap.innerHTML = "";
-      boardWrap.innerHTML = renderSingleBoard(byIndex, base, selectedLayer);
+      boardWrap.innerHTML = renderSingleBoard(byIndex, base, selectedLayer, layout.topology);
     }
     // Fit now (if visible) and force the observer to re-fit on next resize even
     // when the wrapper width is unchanged (content just changed under it).

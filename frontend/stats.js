@@ -252,7 +252,11 @@
     // Render the keyboard grid for the currently-selected layer, then overlay
     const gridSlot = root.querySelector("#stats-grid");
     if (gridSlot && lay) {
-      gridSlot.innerHTML = window.gridRender.renderLayer(lay.layers[currentLayer]);
+      gridSlot.innerHTML = window.gridRender.renderLayer(
+        lay.layers[currentLayer],
+        window.gridRender.decorationsFor(lay),
+        window.gridRender.usedGeometry(lay),
+      );
       if (window.heatmap && heatmap) {
         window.heatmap.applyOverlay(gridSlot, heatmap, currentLayer);
       }
@@ -279,7 +283,11 @@
     const sel = getLayerSelect();
     currentLayer = sel ? parseInt(sel.value, 10) || 0 : currentLayer;
     if (gridSlot && layout) {
-      gridSlot.innerHTML = window.gridRender.renderLayer(layout.layers[currentLayer]);
+      gridSlot.innerHTML = window.gridRender.renderLayer(
+        layout.layers[currentLayer],
+        window.gridRender.decorationsFor(layout),
+        window.gridRender.usedGeometry(layout),
+      );
       if (window.heatmap && lastHeatmap) {
         window.heatmap.applyOverlay(gridSlot, lastHeatmap, currentLayer);
       }

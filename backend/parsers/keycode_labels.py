@@ -96,4 +96,38 @@ KEYCODE_LABELS: dict[str, str] = {
     # ── Vial layer-lock — toggles a "stick the active layer until tapped
     # again" state. Useful for hold-free NAV / SYM usage.
     "QK_LAYER_LOCK": "Lock layer",
+    # ── Keypad. Distinct HID usages from the number row, so a NUM layer built
+    # on KC_KP_* needs its own entries. Labelled "Num N" rather than bare "N"
+    # so the tooltip disambiguates them from KC_1..KC_0; a user-defined name
+    # still overrides what the cell displays.
+    **{f"KC_KP_{i}": f"Num {i}" for i in range(10)},
+    "KC_KP_DOT": "Num .",
+    "KC_KP_COMMA": "Num ,",
+    "KC_KP_PLUS": "Num +",
+    "KC_KP_MINUS": "Num -",
+    "KC_KP_ASTERISK": "Num *",
+    "KC_KP_SLASH": "Num /",
+    "KC_KP_EQUAL": "Num =",
+    "KC_KP_ENTER": "Num Enter",
+    # ── Mouse keys. KC_BTN* are clicks; KC_MS_* move the pointer and
+    # KC_WH_* scroll — three different things that are easy to conflate.
+    "KC_BTN1": "Click L",
+    "KC_BTN2": "Click R",
+    "KC_BTN3": "Click M",
+    "KC_BTN4": "Click 4",
+    "KC_BTN5": "Click 5",
+    "KC_MS_U": "Mouse ↑",
+    "KC_MS_D": "Mouse ↓",
+    "KC_MS_L": "Mouse ←",
+    "KC_MS_R": "Mouse →",
+    "KC_WH_U": "Wheel ↑",
+    "KC_WH_D": "Wheel ↓",
+    "KC_WH_L": "Wheel ←",
+    "KC_WH_R": "Wheel →",
+    # ── System / lock keys. Vial serializes the long forms.
+    "KC_PSCREEN": "PrtSc",
+    "KC_PSCR": "PrtSc",
+    "KC_SCROLLLOCK": "ScrLk",
+    "KC_PAUSE": "Pause",
+    "KC_NUMLOCK": "NumLk",
 }

@@ -71,6 +71,7 @@ _MOD_WRAP_MAP: dict[str, str] = {
 _MULTI_MOD_WRAP_MAP: dict[str, str] = {
     # 2-mod
     "SGUI": "Shift+Cmd",      # KC_SGUI = LSFT + LGUI (macOS screenshot 等)
+    "C_S":  "Ctrl+Shift",     # LCTL + LSFT (Vial 匯出寫法，例：C_S(KC_TAB) 上一個分頁)
     "LCG":  "Ctrl+Cmd",       # LCTL + LGUI
     "LCA":  "Ctrl+Alt",       # LCTL + LALT
     "LSA":  "Shift+Alt",      # LSFT + LALT
@@ -167,6 +168,22 @@ def resolve(raw: str, ctx: LayoutContext) -> ResolvedKey:
                 label_top=f"→L{layer}", label_bottom=f"L{layer}",
                 tap=None, hold=f"→L{layer}",
             )
+
+    # ── Persistent layer switches: TO(N) activates layer N and stays there,
+    # TG(N) toggles it, DF(N) changes the default layer. Unlike MO/LT these
+    # are NOT held, so they deliberately do not reuse the "layer-tap" kind —
+    # interactive.js treats layer-tap as a momentary hold, and mislabelling
+    # them that way would make the simulator behave as if you were holding
+    # the key down. `label_bottom` carries the mode so the cell reads e.g.
+    # "→L0 / TO".
+    for _prefix, _mode in (("TO", "TO"), ("TG", "TG"), ("DF", "DF")):
+        if raw.startswith(f"{_prefix}(") and raw.endswith(")"):
+            n = raw[len(_prefix) + 1:-1]
+            if n.isdigit():
+                return ResolvedKey(
+                    raw=raw, expanded_kind="layer-switch",
+                    label_top=f"→L{int(n)}", label_bottom=_mode,
+                )
 
     # ── LT{N}(KC_X) layer-tap
     if raw.startswith("LT") and "(" in raw and raw.endswith(")"):

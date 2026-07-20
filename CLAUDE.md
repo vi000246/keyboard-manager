@@ -35,7 +35,9 @@ keyboard-manager/
 | `docs/keyboard-map/spec.md` | Keyboard layout spec (what the `.vil` was designed to express) |
 | `docs/keyboard-map/hotkey-analysis.md` | 8-day, 137k-keystroke stats baseline (the data we want to visualize) |
 | `docs/keyboard-map/keystat_analyze.py` | The aggregation logic that was ported into the backend |
-| `sample/mylayout.vil` | The default Vial config — main parsing target (override with `VIAL_CONFIG`) |
+| `sample/beekeeb-36key.vil` | The **default** Vial config — current board, main parsing target (override with `VIAL_CONFIG`) |
+| `sample/mylayout.vil` | Previous board (borne, 10×7). Kept as a second-topology regression fixture |
+| `backend/parsers/topology.py` | Per-keyboard physical geometry — registry by `uid` + inference fallback |
 | `docs/macos-accessibility.md` | One-time Accessibility permission setup for the native helper (the `Python.app` gotcha) |
 
 ## Project conventions
@@ -46,6 +48,11 @@ keyboard-manager/
 - **Stats math**: reuse `keystat_analyze.py` logic — `split_mods`, `is_modifier_combo`, `APP_BUCKETS`.
 - **Tests**: pytest for backend; manual UI verification for frontend; e2e left informal until M5.
 - **Lint**: ruff for Python.
+- **Keyboard geometry**: never hardcode row/column counts or the split point in
+  the frontend. Board shape is resolved server-side in `backend/parsers/topology.py`
+  and shipped on `/api/layout` as `topology`. To support a new board, add a
+  `PROFILES` entry keyed by its `.vil` `uid`; without one it still renders
+  correctly via inference, just flat (no column stagger).
 
 ## Milestones
 
@@ -95,4 +102,4 @@ cd native-helper && python main.py
 2. `docs/PRD.md`
 3. `docs/architecture.md`
 4. The plan file referenced above
-5. `sample/mylayout.vil` (just `head` enough to see the shape)
+5. `sample/beekeeb-36key.vil` (just `head` enough to see the shape)

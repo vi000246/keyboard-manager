@@ -414,7 +414,8 @@
       return;
     }
     const deco = window.gridRender.decorationsFor(layout);
-    const gridHtml = window.gridRender.renderLayer(layout.layers[activeLayer], deco);
+    const geo = window.gridRender.usedGeometry(layout);
+    const gridHtml = window.gridRender.renderLayer(layout.layers[activeLayer], deco, geo);
     const layerLbl = layerName(activeLayer);
     root.innerHTML = `
       <div class="interactive-status">

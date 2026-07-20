@@ -15,7 +15,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, UploadFile
 
-from ..parsers import zmk
+from ..parsers import topology, zmk
 from ..parsers.keycode_labels import KEYCODE_LABELS
 from ..parsers.keycodes import LayoutContext, resolve
 from ..parsers.vial import VialParseError, parse
@@ -141,6 +141,10 @@ def _load(path: Path) -> dict:
     result = {
         "vial_protocol": layout.vial_protocol,
         "uid": layout.uid,
+        # How to physically draw this board (split point, mirroring, stagger).
+        # Resolved per-keyboard, so swapping the .vil swaps the rendered shape
+        # without any frontend change.
+        "topology": asdict(topology.resolve(layout)),
         "layers": layers_json,
         "tap_dance": tap_dance_json,
         "combo": combo_json,

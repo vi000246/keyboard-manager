@@ -163,6 +163,7 @@
       "empty":         "Empty",
       "unknown":       "Unknown",
       "macro":         "Macro",
+      "layer-switch":  "Layer switch",
     };
     return labels[kind] || kind || "Key";
   }
@@ -187,6 +188,7 @@
       case "empty":          body = `<div class="kt-row"><span>No mapping.</span></div>`; break;
       case "unknown":        body = renderUnknown(r); break;
       case "macro":          body = renderMacro(r, raw, layout); break;
+      case "layer-switch":   body = renderLayerSwitch(r); break;
       default:               body = `<div class="kt-row"><span>Output:</span><span>${escape(r.label_top || raw)}</span></div>`;
     }
 
@@ -287,6 +289,23 @@
         <div class="kt-note">raw at that slot: <code>${escape(k.raw)}</code></div>`;
     }
     return `<div class="kt-row"><span>No lower layer defines this slot.</span></div>`;
+  }
+
+  // TO / TG / DF — a tap that changes the active layer and stays there, as
+  // opposed to LT/MO which only hold it while pressed. Spelling that out
+  // matters because the two are easy to confuse on a board that uses both.
+  function renderLayerSwitch(r) {
+    const MODES = {
+      TO: "Switches to this layer and stays (tap again elsewhere to leave).",
+      TG: "Toggles this layer on/off.",
+      DF: "Makes this the default layer.",
+    };
+    const mode = r.label_bottom || "TO";
+    const target = (r.label_top || "").replace("→", "");
+    return `
+      <div class="kt-row"><span class="kt-label">Goes to</span><span>${escape(target)}</span></div>
+      <div class="kt-sub">${escape(MODES[mode] || "Changes the active layer.")}</div>
+      <div class="kt-note">Not a hold — unlike <code>LT</code> / <code>MO</code>.</div>`;
   }
 
   function renderUnknown(r) {
